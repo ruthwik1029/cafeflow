@@ -1,0 +1,231 @@
+name: CafeFlow Production CI & Release Pipeline
+
+on:
+  push:
+    branches: [ master, main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ master, main ]
+  workflow_dispatch:
+    inputs:
+      target_environment:
+        description: 'Target Deployment Environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # --------------------------------------------------------------------------
+  # 1. Code Quality & Automated Testing Gate
+  # --------------------------------------------------------------------------
+  analyze-and-test:
+    name: Lint, Analyze & Comprehensive Test Suite
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Flutter SDK
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.38.7'
+          channel: 'stable'
+          cache: true
+
+      - name: Install Project Dependencies
+        run: flutter pub get
+
+      - name: Verify Code Formatting
+        run: dart format --output=none --set-exit-if-changed .
+
+      - name: Run Static Code Analysis
+        run: flutter analyze --fatal-infos
+
+      - name: Run Complete Test Suite
+        run: flutter test --coverage
+
+      - name: Verify Git Secret Hygiene
+        run: |
+          echo "Scanning for accidental secret leakage..."
+          if git log -p | grep -E 'service_role|supabase_service_key|PRIVATE KEY' | grep -v 'dummy\|example'; then
+            echo "::error::Potential sensitive token or private key committed in git history!"
+            exit 1
+          fi
+          echo "Secret scan passed."
+
+  # --------------------------------------------------------------------------
+  # 2. Web Build & Deployment Validation
+  # --------------------------------------------------------------------------
+  build-web:
+    name: Build Flutter Web Release
+    needs: analyze-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter SDK
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.38.7'
+          channel: 'stable'
+          cache: true
+
+      - name: Install Dependencies
+        run: flutter pub get
+
+      - name: Build Web Production Artifact
+        run: flutter build web --release --base-href /
+
+      - name: Upload Web Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: cafeflow-web-release
+          path: build/web
+          retention-days: 7
+
+  # --------------------------------------------------------------------------
+  # 3. Android APK & AppBundle Build
+  # --------------------------------------------------------------------------
+  build-android:
+    name: Build Android APK & AAB
+    needs: analyze-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Flutter SDK
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.38.7'
+          channel: 'stable'
+          cache: true
+
+      - name: Install Dependencies
+        run: flutter pub get
+
+      - name: Build Release APK
+        run: |
+          flutter build apk --release -t lib/main_android.dart
+          mkdir -p build/installer
+          cp build/app/outputs/flutter-apk/app-release.apk build/installer/CafeFlow-Android-1.0.0.apk
+
+      - name: Build Release App Bundle (AAB)
+        run: flutter build appbundle --release -t lib/main_android.dart
+
+      - name: Upload Android Release Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cafeflow-android-release
+          path: |
+            build/installer/CafeFlow-Android-1.0.0.apk
+            build/app/outputs/flutter-apk/app-release.apk
+            build/app/outputs/bundle/release/app-release.aab
+          retention-days: 7
+
+  # --------------------------------------------------------------------------
+  # 4. Windows Desktop Build & Installer
+  # --------------------------------------------------------------------------
+  build-windows:
+    name: Build Windows Desktop & Installer
+    needs: analyze-and-test
+    runs-on: windows-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter SDK
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.38.7'
+          channel: 'stable'
+          cache: true
+
+      - name: Install Dependencies
+        run: flutter pub get
+
+      - name: Build Windows Desktop Release
+        run: flutter build windows --release
+
+      - name: Compile Inno Setup Windows Installer
+        run: iscc windows\installer\cafeflow_installer.iss
+
+      - name: Upload Windows Release Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: cafeflow-windows-release
+          path: |
+            build/windows/x64/runner/Release/
+            build/installer/CafeFlow-Setup-1.0.0.exe
+          retention-days: 7
+
+  # --------------------------------------------------------------------------
+  # 5. Production Deployment Gate (Requires Explicit Approval)
+  # --------------------------------------------------------------------------
+  production-deploy-gate:
+    name: Production Release Approval
+    needs: [build-web, build-android, build-windows]
+    if: github.event.inputs.target_environment == 'production'
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://cafeflow.app
+    steps:
+      - name: Acknowledge Manual Production Approval
+        run: |
+          echo "Production deployment authorized by release engineer."
+          echo "Proceeding with production artifact publishing."
+
+  # --------------------------------------------------------------------------
+  # 6. Draft GitHub Release (Triggered by version tags)
+  # --------------------------------------------------------------------------
+  draft-github-release:
+    name: Prepare Draft GitHub Release
+    needs: [build-android, build-windows]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download Windows Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: cafeflow-windows-release
+          path: release-assets/windows
+
+      - name: Download Android Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: cafeflow-android-release
+          path: release-assets/android
+
+      - name: Create Draft GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: CafeFlow ${{ github.ref_name }} Demo Release
+          draft: true
+          prerelease: false
+          files: |
+            release-assets/windows/**/CafeFlow-Setup-1.0.0.exe
+            release-assets/android/**/CafeFlow-Android-1.0.0.apk
+
