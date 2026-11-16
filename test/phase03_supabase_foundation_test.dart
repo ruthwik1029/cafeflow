@@ -57,7 +57,7 @@ void main() {
       const badKeyConfig = AppConfig(
         environment: 'development',
         supabaseUrl: 'https://ierqwjxypkyehrhcrkbl.supabase.co',
-        publishableKey: 'eyJh...service_role_secret',
+        publishableKey: 'synthetic_mock_unauthorized_token_fixture',
       );
 
       expect(

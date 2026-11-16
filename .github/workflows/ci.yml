@@ -64,12 +64,7 @@ jobs:
 
       - name: Verify Git Secret Hygiene
         run: |
-          echo "Scanning for accidental secret leakage..."
-          if git log -p | grep -E 'service_role|supabase_service_key|PRIVATE KEY' | grep -v 'dummy\|example'; then
-            echo "::error::Potential sensitive token or private key committed in git history!"
-            exit 1
-          fi
-          echo "Secret scan passed."
+          python tool/scan_secrets.py
 
   # --------------------------------------------------------------------------
   # 2. Web Build & Deployment Validation
