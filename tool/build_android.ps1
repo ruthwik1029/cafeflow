@@ -25,6 +25,9 @@ try {
     )
     $targetFormat = if ($AppBundle) { 'appbundle' } else { 'apk' }
     $taskArguments = @('build', $targetFormat, '--release', '-t', 'lib/main_android.dart')
+    if (Test-Path (Join-Path $taskRoot '.env')) {
+        $taskArguments += '--dart-define-from-file=.env'
+    }
     if ($VerboseBuild) { $taskArguments += '-v' }
     & $Flutter @taskArguments
     $taskExitCode = $LASTEXITCODE

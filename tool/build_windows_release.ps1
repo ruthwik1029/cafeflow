@@ -53,7 +53,12 @@ try {
 
     # 3. Build Windows Release
     Write-Host "[3/4] Compiling Windows release executable..." -ForegroundColor Yellow
-    & $Flutter build windows --release
+    $buildArgs = @('build', 'windows', '--release')
+    if (Test-Path "$root\.env") {
+        Write-Host "      Detected .env file. Including compile-time configuration..." -ForegroundColor Gray
+        $buildArgs += '--dart-define-from-file=.env'
+    }
+    & $Flutter @buildArgs
     if ($LASTEXITCODE -ne 0) {
         Write-Error "Flutter Windows release build failed."
         exit 1

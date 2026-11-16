@@ -123,7 +123,7 @@ class CafeRealtimeService {
 
 final cafeRealtimeServiceProvider = Provider<CafeRealtimeService?>((ref) {
   final backend = ref.watch(backendProvider);
-  if (backend.status != BackendStatus.initialized) {
+  if (backend.status != BackendStatus.initialized || backend.client == null) {
     return null;
   }
   return CafeRealtimeService(ref.watch(realtimeGatewayProvider));

@@ -29,7 +29,12 @@ try {
 
     # 2. Build Web Release
     Write-Host "[2/3] Compiling Flutter Web production bundle..." -ForegroundColor Yellow
-    & $Flutter build web --release --base-href /
+    $webArgs = @('build', 'web', '--release', '--base-href', '/')
+    if (Test-Path "$root\.env") {
+        Write-Host "      Detected .env file. Including compile-time configuration..." -ForegroundColor Gray
+        $webArgs += '--dart-define-from-file=.env'
+    }
+    & $Flutter @webArgs
     if ($LASTEXITCODE -ne 0) {
         Write-Error "Flutter Web build failed."
         exit 1

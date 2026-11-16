@@ -47,6 +47,9 @@ flutter pub get
 
 # 5. Build arguments (strictly allowing only public, non-secret parameters)
 DART_DEFINES=""
+if [ -f ".env" ]; then
+    DART_DEFINES="--dart-define-from-file=.env"
+fi
 if [ -n "${SUPABASE_URL}" ]; then
     DART_DEFINES="${DART_DEFINES} --dart-define=SUPABASE_URL=${SUPABASE_URL}"
 fi

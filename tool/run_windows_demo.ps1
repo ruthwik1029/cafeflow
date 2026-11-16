@@ -34,9 +34,15 @@ try {
     Write-Host "      Windows desktop enabled." -ForegroundColor Green
 
     # 3. Launch Windows app
-    Write-Host "[3/3] Launching CafeFlow Desktop (Demo Mode)..." -ForegroundColor Yellow
-    Write-Host "      Starting application with simulated payments and local demo catalog..." -ForegroundColor Gray
-    & $Flutter run -d windows -t lib/main_windows.dart --dart-define=DEMO_MODE=true
+    Write-Host "[3/3] Launching CafeFlow Desktop..." -ForegroundColor Yellow
+    $runArgs = @('run', '-d', 'windows', '-t', 'lib/main_windows.dart')
+    if (Test-Path "$root\.env") {
+        Write-Host "      Detected .env file. Including configuration..." -ForegroundColor Gray
+        $runArgs += '--dart-define-from-file=.env'
+    } else {
+        $runArgs += '--dart-define=DEMO_MODE=true'
+    }
+    & $Flutter @runArgs
 }
 catch {
     Write-Error "Failed to launch Windows application: $_"

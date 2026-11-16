@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/routing/workspace.dart';
+import '../../../core/services/backend.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/cafe_components.dart';
+import '../../auth/application/auth_controller.dart';
 
-class WorkspaceShell extends StatelessWidget {
+class WorkspaceShell extends ConsumerWidget {
   const WorkspaceShell({
     required this.workspace,
     required this.available,
@@ -19,14 +22,21 @@ class WorkspaceShell extends StatelessWidget {
   final Widget child;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final wide = MediaQuery.sizeOf(context).width >= CafeSpace.desktop;
+    final backend = ref.watch(backendProvider);
+    final auth = ref.watch(authControllerProvider);
+    final isLive = backend.status == BackendStatus.initialized;
+    final isAuth = auth.isAuthenticated;
+
     return Scaffold(
-      drawer: wide ? null : Drawer(child: _navigation(context, drawer: true)),
+      drawer: wide
+          ? null
+          : Drawer(child: _navigation(context, ref, drawer: true)),
       body: SafeArea(
         child: Row(
           children: [
-            if (wide) SizedBox(width: 248, child: _navigation(context)),
+            if (wide) SizedBox(width: 248, child: _navigation(context, ref)),
             if (wide) const VerticalDivider(width: 1),
             Expanded(
               child: Column(
@@ -61,12 +71,22 @@ class WorkspaceShell extends StatelessWidget {
                           ),
                         ),
                         if (wide)
-                          const Padding(
-                            padding: EdgeInsets.only(right: 16),
-                            child: StatusPill(
-                              'Development preview',
-                              icon: Icons.code_rounded,
-                            ),
+                          Padding(
+                            padding: const EdgeInsets.only(right: 16),
+                            child: isAuth
+                                ? StatusPill(
+                                    'Live · ${auth.activeMembership?.restaurantName ?? 'Flagship Bistro'}',
+                                    icon: Icons.cloud_done_rounded,
+                                  )
+                                : isLive
+                                ? const StatusPill(
+                                    'Supabase Connected',
+                                    icon: Icons.cloud_outlined,
+                                  )
+                                : const StatusPill(
+                                    'Development preview',
+                                    icon: Icons.code_rounded,
+                                  ),
                           ),
                         const ThemeControl(),
                       ],
@@ -82,7 +102,16 @@ class WorkspaceShell extends StatelessWidget {
     );
   }
 
-  Widget _navigation(BuildContext context, {bool drawer = false}) {
+  Widget _navigation(
+    BuildContext context,
+    WidgetRef ref, {
+    bool drawer = false,
+  }) {
+    final backend = ref.watch(backendProvider);
+    final auth = ref.watch(authControllerProvider);
+    final isLive = backend.status == BackendStatus.initialized;
+    final isAuth = auth.isAuthenticated;
+
     void go(String path) {
       if (drawer) Navigator.pop(context);
       context.go(path);
@@ -145,43 +174,96 @@ class WorkspaceShell extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Different roles. One flow.',
-                      style: Theme.of(context).textTheme.labelLarge,
-                    ),
-                    const SizedBox(height: 6),
-                    const Text(
-                      'Preview a workspace. This is not an authenticated session.',
-                      style: TextStyle(fontSize: 12, height: 1.5),
-                    ),
-                    const SizedBox(height: 12),
-                    PopupMenuButton<WorkspaceDefinition>(
-                      tooltip: 'Switch demo workspace',
-                      onSelected: (value) => go(value.home),
-                      itemBuilder: (_) => available
-                          .map(
-                            (value) => PopupMenuItem(
-                              value: value,
-                              child: Text(value.label),
+                    if (isAuth) ...[
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.account_circle,
+                            size: 20,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              auth.user?.fullName ?? 'Authenticated User',
+                              style: Theme.of(context).textTheme.labelLarge,
+                              overflow: TextOverflow.ellipsis,
                             ),
-                          )
-                          .toList(),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.swap_horiz_rounded, size: 20),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                'Switch workspace',
-                                style: Theme.of(context).textTheme.labelLarge,
-                              ),
-                            ),
-                          ],
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Role: ${auth.activeRole?.name.toUpperCase() ?? 'STAFF'}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                       ),
-                    ),
+                      const SizedBox(height: 12),
+                      OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size.fromHeight(36),
+                        ),
+                        icon: const Icon(Icons.logout, size: 16),
+                        label: const Text('Sign out'),
+                        onPressed: () async {
+                          await ref
+                              .read(authControllerProvider.notifier)
+                              .logout();
+                          go('/login');
+                        },
+                      ),
+                    ] else ...[
+                      Text(
+                        'Different roles. One flow.',
+                        style: Theme.of(context).textTheme.labelLarge,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        isLive
+                            ? 'Connected to Supabase. Sign in for live syncing.'
+                            : 'Preview a workspace. This is not an authenticated session.',
+                        style: const TextStyle(fontSize: 12, height: 1.5),
+                      ),
+                      const SizedBox(height: 12),
+                      FilledButton.tonalIcon(
+                        style: FilledButton.styleFrom(
+                          minimumSize: const Size.fromHeight(36),
+                        ),
+                        icon: const Icon(Icons.login_rounded, size: 16),
+                        label: const Text('Sign In to Account'),
+                        onPressed: () => go('/login'),
+                      ),
+                      const SizedBox(height: 8),
+                      PopupMenuButton<WorkspaceDefinition>(
+                        tooltip: 'Switch demo workspace',
+                        onSelected: (value) => go(value.home),
+                        itemBuilder: (_) => available
+                            .map(
+                              (value) => PopupMenuItem(
+                                value: value,
+                                child: Text(value.label),
+                              ),
+                            )
+                            .toList(),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.swap_horiz_rounded, size: 18),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Switch workspace',
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ],
                 ),
               ),

@@ -4,13 +4,14 @@ import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../config/app_config.dart';
+import '../config/config_loader.dart';
 import '../services/backend.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_controller.dart';
 
 Future<void> bootstrap(GoRouter Function(AppConfig) createRouter) async {
   WidgetsFlutterBinding.ensureInitialized();
-  final config = AppConfig.fromEnvironment();
+  final config = loadAppConfig();
   ThemeStore themeStore;
   try {
     themeStore = PreferencesThemeStore(await SharedPreferences.getInstance());
