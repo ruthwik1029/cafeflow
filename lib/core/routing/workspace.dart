@@ -44,6 +44,7 @@ class WorkspaceDefinition {
 List<WorkspaceRole> rolesFor(InternalTarget target) => switch (target) {
   InternalTarget.windows => const [
     WorkspaceRole.admin,
+    WorkspaceRole.owner,
     WorkspaceRole.cashier,
     WorkspaceRole.kitchen,
   ],
