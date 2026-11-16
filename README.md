@@ -7,13 +7,26 @@
 
 ## 🚀 Download & Live Demo
 
-Get started immediately with pre-compiled demo builds:
+Get started immediately with official pre-compiled releases and the live web portal:
 
-| Platform | Download / Access Destination | Description |
-| :--- | :--- | :--- |
-| **🪟 Windows Desktop** | [**Download Installer (.exe)**](https://github.com/ruthwik1029/cafeflow/releases/latest/download/CafeFlow-Setup-1.0.0.exe) | Self-extracting Inno Setup installer (`CafeFlow-Setup-1.0.0.exe`) for Windows 10/11 x64 terminals. |
-| **🤖 Android Mobile / Tablet** | [**Download APK (.apk)**](https://github.com/ruthwik1029/cafeflow/releases/latest/download/CafeFlow-Android-1.0.0.apk) | Universal Release APK (`CafeFlow-Android-1.0.0.apk`) for waiter tablets and POS terminals. |
-| **🌐 Web Application** | [**Open Web Customer Portal**](https://YOUR-VERCEL-DEPLOYMENT.vercel.app) | Public cafe menu and storefront (Replace with your actual Vercel project deployment URL). |
+| Platform | Download / Access Destination | Target & Package | Status |
+| :--- | :--- | :--- | :---: |
+| **🪟 Windows Desktop** | [**Download Windows Installer (.exe)**](https://github.com/ruthwik1029/cafeflow/releases/latest/download/CafeFlow-Setup-1.0.0.exe) | Windows 10/11 x64 (`CafeFlow-Setup-1.0.0.exe`, ~12 MB) | **Latest Release** |
+| **🤖 Android Mobile / Tablet** | [**Download Android APK (.apk)**](https://github.com/ruthwik1029/cafeflow/releases/latest/download/CafeFlow-Android-1.0.0.apk) | Universal Release APK (`CafeFlow-Android-1.0.0.apk`, ~62 MB) | **Latest Release** |
+| **🌐 Customer Web Portal** | [**Open Live Web Storefront**](https://cafeflow-ruth007.vercel.app) | Responsive Single-Page Application (SPA) on Vercel | **Live Demo** |
+| **📦 All Releases** | [**Browse GitHub Releases**](https://github.com/ruthwik1029/cafeflow/releases) | Source code, version changelogs, and release assets | **Releases Hub** |
+
+> [!NOTE]
+> **Version & Release Notes:**
+> - **Application Version:** `1.0.0` (Current Published Release Tag: `v1.0.1`).
+> - **Direct Download Guarantee:** Stable download links always resolve to the latest published release binaries verified by the CI pipeline.
+> - **Web Storefront:** Deployed continuously to Vercel with automated single-page routing and HTTP security headers.
+
+### ⚡ Quick Start
+
+- **Windows Desktop:** Download and run `CafeFlow-Setup-1.0.0.exe`. The Inno Setup wizard installs the application to user local storage (no administrative elevation required) and creates Desktop/Start Menu shortcuts.
+- **Android Mobile & Tablet:** Download `CafeFlow-Android-1.0.0.apk` onto an Android 5.0+ device, permit installation from unknown sources in your settings, and open the APK to install.
+- **Web Portal:** Navigate directly to [cafeflow-ruth007.vercel.app](https://cafeflow-ruth007.vercel.app) in any modern browser (Chrome, Edge, Firefox, Safari) to explore the public cafe storefront and live menu.
 
 ---
 
