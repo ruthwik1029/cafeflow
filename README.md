@@ -11,11 +11,9 @@ Get started immediately with pre-compiled demo builds:
 
 | Platform | Download / Access Destination | Description |
 | :--- | :--- | :--- |
-| **🪟 Windows Desktop** | [**Download Installer (.exe)**](https://github.com/OWNER/cafeflow/releases/latest/download/CafeFlow-Setup-1.0.0.exe) | Self-extracting Inno Setup installer (`CafeFlow-Setup-1.0.0.exe`) for Windows 10/11 x64 terminals. |
-| **🤖 Android Mobile / Tablet** | [**Download APK (.apk)**](https://github.com/OWNER/cafeflow/releases/latest/download/CafeFlow-Android-1.0.0.apk) | Universal Release APK (`CafeFlow-Android-1.0.0.apk`) for waiter tablets and POS terminals. |
+| **🪟 Windows Desktop** | [**Download Installer (.exe)**](https://github.com/ruthwik1029/cafeflow/releases/latest/download/CafeFlow-Setup-1.0.0.exe) | Self-extracting Inno Setup installer (`CafeFlow-Setup-1.0.0.exe`) for Windows 10/11 x64 terminals. |
+| **🤖 Android Mobile / Tablet** | [**Download APK (.apk)**](https://github.com/ruthwik1029/cafeflow/releases/latest/download/CafeFlow-Android-1.0.0.apk) | Universal Release APK (`CafeFlow-Android-1.0.0.apk`) for waiter tablets and POS terminals. |
 | **🌐 Web Application** | [**Open Web Customer Portal**](https://YOUR-VERCEL-DEPLOYMENT.vercel.app) | Public cafe menu and storefront (Replace with your actual Vercel project deployment URL). |
-
-*(Replace `OWNER` in the GitHub release URLs with your GitHub organization or username upon publishing).*
 
 ---
 
@@ -37,7 +35,7 @@ CafeFlow connects front-of-house hospitality, kitchen order dispatch, back-of-ho
 
 ## 🛠️ Technology Stack
 
-- **UI Framework:** Flutter 3.38+ / Dart 3.10+ (Null Safety)
+- **UI Framework:** Flutter 3.47+ / Dart 3.13+ (Null Safety)
 - **State Management:** Riverpod 3.5 (NotifierProviders, StateNotifierProviders, Providers)
 - **Local Persistence & Offline Queue:** SQLite via Drift with transactional queuing and UUID idempotency
 - **Backend & Realtime:** Supabase PostgreSQL 15+, Row-Level Security (RLS), Realtime publications, and PL/pgSQL RPCs
