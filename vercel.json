@@ -1,6 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "cleanUrls": true,
+  "buildCommand": "bash tool/build_vercel.sh",
   "outputDirectory": "build/web",
   "rewrites": [
     {
@@ -35,11 +36,20 @@
       ]
     },
     {
-      "source": "/assets/(.*)",
+      "source": "/(assets|canvaskit)/(.*)",
       "headers": [
         {
           "key": "Cache-Control",
           "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/(flutter_bootstrap\\.js|main\\.dart\\.js|index\\.html|version\\.json)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=0, must-revalidate"
         }
       ]
     }

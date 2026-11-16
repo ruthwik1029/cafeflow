@@ -1,0 +1,10 @@
+{
+  "name": "cafeflow-web",
+  "version": "1.0.0",
+  "private": true,
+  "description": "CafeFlow Customer Web Portal",
+  "scripts": {
+    "build": "bash tool/build_vercel.sh"
+  }
+}
+
