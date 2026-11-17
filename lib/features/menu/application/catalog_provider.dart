@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/errors/app_failure.dart';
 import '../../../core/services/backend.dart';
 import '../../../core/storage/local_database.dart';
 import '../../auth/application/auth_controller.dart';
@@ -37,38 +38,83 @@ final catalogProvider = FutureProvider<CatalogSnapshot>((ref) async {
         restaurantId: restaurantId,
       );
 
-      // If remote returned published catalog data, cache if authenticated and return
-      if (remoteSnapshot.categories.isNotEmpty ||
-          remoteSnapshot.products.isNotEmpty) {
-        if (restaurantId != null) {
-          // Cache categories and products into local database for offline resilience
-          for (final cat in remoteSnapshot.categories) {
-            await localDb.put('menu_categories', cat.id, {
-              'id': cat.id,
-              'restaurant_id': restaurantId,
-              'name': cat.name,
-              'is_active': cat.active,
-            });
-          }
-          for (final prod in remoteSnapshot.products) {
-            await localDb.put('menu_items', prod.id, {
-              'id': prod.id,
-              'restaurant_id': restaurantId,
-              'category_id': prod.categoryId,
-              'name': prod.name,
-              'price_minor': prod.priceMinor,
-              'description': prod.description,
-              'image': prod.image,
-              'is_available': prod.available,
-              'is_archived': prod.archived,
-              'is_featured': prod.featured,
-            });
-          }
+      // Cache categories and products into local database for offline resilience
+      if (restaurantId != null &&
+          (remoteSnapshot.categories.isNotEmpty ||
+              remoteSnapshot.products.isNotEmpty)) {
+        for (final cat in remoteSnapshot.categories) {
+          await localDb.put('menu_categories', cat.id, {
+            'id': cat.id,
+            'restaurant_id': restaurantId,
+            'name': cat.name,
+            'is_active': cat.active,
+          });
         }
-        return remoteSnapshot;
+        for (final prod in remoteSnapshot.products) {
+          await localDb.put('menu_items', prod.id, {
+            'id': prod.id,
+            'restaurant_id': restaurantId,
+            'category_id': prod.categoryId,
+            'name': prod.name,
+            'price_minor': prod.priceMinor,
+            'description': prod.description,
+            'image': prod.image,
+            'is_available': prod.available,
+            'is_archived': prod.archived,
+            'is_featured': prod.featured,
+          });
+        }
       }
-    } catch (_) {
-      // Network dropped or Supabase tables unmigrated -> check local database cache
+
+      // Valid remote catalog (even if empty initially, isDemo is false)
+      return remoteSnapshot;
+    } catch (e) {
+      // Network dropped -> check local database cache if authenticated
+      if (restaurantId != null) {
+        final catRows = await localDb.query(
+          'menu_categories',
+          where: {'restaurant_id': restaurantId},
+        );
+        final prodRows = await localDb.query(
+          'menu_items',
+          where: {'restaurant_id': restaurantId},
+        );
+
+        if (catRows.isNotEmpty || prodRows.isNotEmpty) {
+          final cachedCategories = catRows.map((r) {
+            return MenuCategory(
+              id: r['id'] as String,
+              name: r['name'] as String,
+              active: (r['is_active'] as bool?) ?? true,
+            );
+          }).toList();
+
+          final cachedProducts = prodRows.map((r) {
+            return MenuProduct(
+              id: r['id'] as String,
+              categoryId: (r['category_id'] as String?) ?? '',
+              name: r['name'] as String,
+              priceMinor: (r['price_minor'] as num).toInt(),
+              description: (r['description'] as String?) ?? '',
+              image: (r['image'] as String?) ?? '',
+              available: (r['is_available'] as bool?) ?? true,
+              archived: (r['is_archived'] as bool?) ?? false,
+              featured: (r['is_featured'] as bool?) ?? false,
+            );
+          }).toList();
+
+          return CatalogSnapshot(
+            categories: cachedCategories,
+            products: cachedProducts,
+            isDemo: false,
+          );
+        }
+      }
+
+      // If backend was initialized but fetch failed and no local cache exists
+      throw AppFailure(
+        e is AppFailure ? e.message : 'Unable to load menu from Supabase. Please check your connection.',
+      );
     }
   }
 
@@ -83,7 +129,7 @@ final catalogProvider = FutureProvider<CatalogSnapshot>((ref) async {
       where: {'restaurant_id': restaurantId},
     );
 
-    if (catRows.isNotEmpty && prodRows.isNotEmpty) {
+    if (catRows.isNotEmpty || prodRows.isNotEmpty) {
       final cachedCategories = catRows.map((r) {
         return MenuCategory(
           id: r['id'] as String,
@@ -114,6 +160,13 @@ final catalogProvider = FutureProvider<CatalogSnapshot>((ref) async {
     }
   }
 
-  // 3. Fallback to demo catalog for unconfigured or unmigrated environments
-  return ref.watch(demoCatalogProvider);
+  // 3. Fallback to demo catalog ONLY when demo mode is allowed in non-production
+  if (backend.config.allowsDemo) {
+    return ref.watch(demoCatalogProvider);
+  }
+
+  // In production with unconfigured or failed backend, throw explicit error
+  throw AppFailure(
+    'Supabase backend is not configured: ${backend.message}. Demo mode is disabled in production.',
+  );
 });

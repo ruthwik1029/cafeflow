@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/widgets/cafe_components.dart';
 import '../../../shared/components/section_heading.dart';
 import '../../demo/application/demo_catalog_controller.dart';
+import '../application/catalog_provider.dart';
 import '../domain/catalog.dart';
 
 class PopularItemsPage extends ConsumerWidget {
@@ -11,14 +12,16 @@ class PopularItemsPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final catalog = ref.watch(demoCatalogProvider);
+    final CatalogSnapshot catalog =
+        ref.watch(catalogProvider).asData?.value ??
+        ref.watch(demoCatalogProvider);
     final popular = catalog.products.where((p) => p.featured).toList();
 
     return PageBody(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const DemoNotice(),
+          if (catalog.isDemo) const DemoNotice(),
           const SectionHeading(
             'Popular Menu Items',
             subtitle:

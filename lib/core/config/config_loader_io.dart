@@ -41,6 +41,29 @@ AppConfig resolveAppConfig() {
     // Ignore executable path resolution errors
   }
 
+  // Check user profile and app data locations on desktop
+  if (Platform.isWindows) {
+    final appData = Platform.environment['APPDATA'];
+    if (appData != null && appData.isNotEmpty) {
+      candidates.add(File('$appData/CafeFlow/.env'));
+    }
+    final localAppData = Platform.environment['LOCALAPPDATA'];
+    if (localAppData != null && localAppData.isNotEmpty) {
+      candidates.add(File('$localAppData/CafeFlow/.env'));
+      candidates.add(File('$localAppData/Programs/CafeFlow/.env'));
+    }
+    final userProfile = Platform.environment['USERPROFILE'];
+    if (userProfile != null && userProfile.isNotEmpty) {
+      candidates.add(File('$userProfile/.cafeflow/.env'));
+    }
+  } else if (Platform.isLinux || Platform.isMacOS) {
+    final home = Platform.environment['HOME'];
+    if (home != null && home.isNotEmpty) {
+      candidates.add(File('$home/.cafeflow/.env'));
+      candidates.add(File('$home/.config/cafeflow/.env'));
+    }
+  }
+
   for (final candidate in candidates) {
     if (candidate.existsSync()) {
       try {

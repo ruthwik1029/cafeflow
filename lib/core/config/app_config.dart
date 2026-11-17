@@ -28,6 +28,9 @@ class AppConfig {
     if (!AppEnvironment.values.any((value) => value.name == environment)) {
       return 'APP_ENV must be development, staging, or production.';
     }
+    if (environment == 'production' && !hasBackendValues) {
+      return 'Production configuration is missing. SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY are required.';
+    }
     if (!hasBackendValues) return null;
     final uri = Uri.tryParse(supabaseUrl);
     if (uri == null ||

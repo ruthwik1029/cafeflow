@@ -81,7 +81,9 @@ class SupabaseAuthRepository implements AuthRepository {
           .timeout(const Duration(seconds: 10));
       resolvedEmail = res as String?;
     } catch (_) {
-      throw const AppFailure('Could not resolve username. Check connection.');
+      throw const AppFailure(
+        'Username sign-in is not enabled. Please sign in with your email address.',
+      );
     }
 
     if (resolvedEmail == null || resolvedEmail.isEmpty) {

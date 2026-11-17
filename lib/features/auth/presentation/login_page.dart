@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/routing/workspace.dart';
+import '../../../core/services/backend.dart';
 import '../../../core/widgets/cafe_components.dart';
 import '../../workspaces/domain/workspace_catalog.dart';
 import '../application/auth_controller.dart';
@@ -114,6 +115,57 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                         ),
                       ),
                       const SizedBox(height: 28),
+
+                      // Backend configuration banner
+                      Builder(
+                        builder: (context) {
+                          final backend = ref.watch(backendProvider);
+                          if (backend.status == BackendStatus.initialized) {
+                            return const SizedBox.shrink();
+                          }
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 20),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 12,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .errorContainer
+                                    .withAlpha(80),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(
+                                  color: Theme.of(context).colorScheme.error
+                                      .withAlpha(120),
+                                ),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.cloud_off_outlined,
+                                    size: 20,
+                                    color: Theme.of(context).colorScheme.error,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      'Supabase backend is unavailable: ${backend.message}',
+                                      style: TextStyle(
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .error,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
 
                       // Error message banner
                       if (authState.errorMessage != null) ...[

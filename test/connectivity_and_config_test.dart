@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:cafeflow/core/config/app_config.dart';
 import 'package:cafeflow/core/config/config_loader.dart';
 import 'package:cafeflow/core/database/database_gateway.dart';
 import 'package:cafeflow/core/errors/app_failure.dart';
@@ -298,6 +299,76 @@ void main() {
       expect(snapshot.products.length, 1);
       expect(snapshot.products.first.name, 'Ceremonial Matcha Latte');
       expect(snapshot.products.first.priceMinor, 32000);
+    });
+
+    test('catalogProvider returns valid empty live catalog when remote database is empty', () async {
+      final mockGateway = MockDatabaseGateway({
+        'menu_categories': [],
+        'menu_items': [],
+      });
+      final mockTransport = MockChangefeedTransport();
+      final realtimeGateway = RealtimeGateway(mockTransport);
+      final realtimeService = CafeRealtimeService(realtimeGateway);
+      final menuRepo = SupabaseMenuRepository(
+        gateway: mockGateway,
+        realtime: realtimeService,
+      );
+
+      final container = ProviderContainer(
+        overrides: [
+          backendProvider.overrideWithValue(
+            const BackendState(
+              BackendStatus.initialized,
+              'Client initialized.',
+            ),
+          ),
+          menuRepositoryProvider.overrideWithValue(menuRepo),
+          authControllerProvider.overrideWith(
+            () => _FakeAuthController(
+              const AuthState(status: AuthStatus.unauthenticated),
+            ),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      final snapshot = await container.read(catalogProvider.future);
+      expect(snapshot.isDemo, isFalse);
+      expect(snapshot.categories, isEmpty);
+      expect(snapshot.products, isEmpty);
+    });
+
+    test('catalogProvider fails closed with AppFailure in production when backend is unconfigured', () async {
+      const prodConfig = AppConfig(environment: 'production', demoMode: false);
+      final container = ProviderContainer(
+        overrides: [
+          backendProvider.overrideWithValue(
+            const BackendState(
+              BackendStatus.unconfigured,
+              'Unconfigured in production.',
+              config: prodConfig,
+            ),
+          ),
+          menuRepositoryProvider.overrideWithValue(null),
+          authControllerProvider.overrideWith(
+            () => _FakeAuthController(
+              const AuthState(status: AuthStatus.unauthenticated),
+            ),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+
+      container.listen(catalogProvider, (previous, next) {});
+      await pumpEventQueue();
+
+      final asyncVal = container.read(catalogProvider);
+      expect(asyncVal.hasError, isTrue);
+      expect(asyncVal.error, isA<AppFailure>());
+      expect(
+        (asyncVal.error! as AppFailure).message,
+        contains('Demo mode is disabled in production'),
+      );
     });
   });
 }

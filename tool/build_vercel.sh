@@ -64,6 +64,9 @@ fi
 if [ -n "${APP_ENV}" ]; then
     DART_DEFINES="${DART_DEFINES} --dart-define=APP_ENV=${APP_ENV}"
 fi
+if [ -n "${DEMO_MODE}" ]; then
+    DART_DEFINES="${DART_DEFINES} --dart-define=DEMO_MODE=${DEMO_MODE}"
+fi
 
 # 6. Compile Web Release Bundle
 echo "→ Compiling Flutter Web release bundle..."

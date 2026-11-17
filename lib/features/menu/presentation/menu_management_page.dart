@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/errors/app_failure.dart';
+import '../../../core/services/backend.dart';
 import '../../../core/widgets/cafe_components.dart';
 import '../../../shared/components/product_card.dart';
 import '../../../shared/components/section_heading.dart';
@@ -83,6 +84,11 @@ class MenuManagementPage extends ConsumerWidget {
                   ),
                 ),
               if (categoriesOnly) ...[
+                if (catalog.categories.isEmpty)
+                  const CafeEmptyState(
+                    title: 'No categories yet',
+                    message: 'Click "Add category" to create your first menu category.',
+                  ),
                 for (final category in catalog.categories)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 12),
@@ -187,11 +193,41 @@ class MenuManagementPage extends ConsumerWidget {
                                           menuRepositoryProvider,
                                         );
                                         if (repo is SupabaseMenuRepository) {
-                                          await repo.setMenuItemAvailability(
-                                            itemId: product.id,
-                                            available: !product.available,
-                                          );
-                                          ref.invalidate(catalogProvider);
+                                          try {
+                                            await repo.setMenuItemAvailability(
+                                              itemId: product.id,
+                                              available: !product.available,
+                                            );
+                                            ref.invalidate(catalogProvider);
+                                          } catch (e) {
+                                            if (context.mounted) {
+                                              ScaffoldMessenger.of(
+                                                context,
+                                              ).showSnackBar(
+                                                SnackBar(
+                                                  content: Text(
+                                                    e is AppFailure
+                                                        ? e.message
+                                                        : 'Failed to update availability: $e',
+                                                  ),
+                                                  backgroundColor: Theme.of(
+                                                    context,
+                                                  ).colorScheme.error,
+                                                ),
+                                              );
+                                            }
+                                          }
+                                        } else {
+                                          if (context.mounted) {
+                                            ScaffoldMessenger.of(context)
+                                                .showSnackBar(
+                                                  const SnackBar(
+                                                    content: Text(
+                                                      'Backend service is not configured for live updates.',
+                                                    ),
+                                                  ),
+                                                );
+                                          }
                                         }
                                       },
                                 child: Text(
@@ -212,12 +248,47 @@ class MenuManagementPage extends ConsumerWidget {
                                   }
                                   final repo = ref.read(menuRepositoryProvider);
                                   if (repo is SupabaseMenuRepository) {
-                                    if (!product.archived) {
-                                      await repo.archiveMenuItem(
-                                        itemId: product.id,
-                                      );
+                                    try {
+                                      if (!product.archived) {
+                                        await repo.archiveMenuItem(
+                                          itemId: product.id,
+                                        );
+                                      } else {
+                                        await repo.updateMenuItem(
+                                          itemId: product.id,
+                                          available: true,
+                                        );
+                                      }
+                                      ref.invalidate(catalogProvider);
+                                    } catch (e) {
+                                      if (context.mounted) {
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
+                                          SnackBar(
+                                            content: Text(
+                                              e is AppFailure
+                                                  ? e.message
+                                                  : 'Failed to update archive status: $e',
+                                            ),
+                                            backgroundColor: Theme.of(context)
+                                                .colorScheme
+                                                .error,
+                                          ),
+                                        );
+                                      }
                                     }
-                                    ref.invalidate(catalogProvider);
+                                  } else {
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                            const SnackBar(
+                                              content: Text(
+                                                'Backend service is not configured for live updates.',
+                                              ),
+                                            ),
+                                          );
+                                    }
                                   }
                                 },
                                 child: Text(
@@ -290,6 +361,7 @@ class MenuManagementPage extends ConsumerWidget {
                       if (!isDemo) {
                         final repo = ref.read(menuRepositoryProvider);
                         final auth = ref.read(authControllerProvider);
+                        final backend = ref.read(backendProvider);
                         final restId = auth.activeMembership?.restaurantId;
 
                         if (repo is SupabaseMenuRepository && restId != null) {
@@ -319,9 +391,23 @@ class MenuManagementPage extends ConsumerWidget {
                           }
                           return;
                         }
+
+                        // Explicit error when not in demo mode
+                        setState(() {
+                          isSaving = false;
+                          if (backend.status != BackendStatus.initialized) {
+                            error =
+                                'Supabase backend is not configured: ${backend.message}';
+                          } else if (restId == null) {
+                            error = 'You must be signed in with an active restaurant membership to save categories.';
+                          } else {
+                            error = 'Live database connection is unavailable.';
+                          }
+                        });
+                        return;
                       }
 
-                      // Demo fallback
+                      // Intentional demo save
                       try {
                         ref
                             .read(demoCatalogProvider.notifier)
@@ -343,7 +429,7 @@ class MenuManagementPage extends ConsumerWidget {
                       height: 18,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : Text(isDemo ? 'Save local category' : 'Save category'),
+                  : Text(isDemo ? 'Save in Demo Mode' : 'Save category'),
             ),
           ],
         ),

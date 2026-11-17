@@ -1035,7 +1035,6 @@ class _StaffPageState extends ConsumerState<StaffPage>
   ) {
     final userIdController = TextEditingController();
     final nameController = TextEditingController();
-    final usernameController = TextEditingController();
     final phoneController = TextEditingController();
     final deptController = TextEditingController(text: 'Front of House');
 
@@ -1102,14 +1101,6 @@ class _StaffPageState extends ConsumerState<StaffPage>
                     controller: nameController,
                     decoration: const InputDecoration(
                       labelText: 'Full Name *',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: usernameController,
-                    decoration: const InputDecoration(
-                      labelText: 'Username (Optional)',
                       border: OutlineInputBorder(),
                     ),
                   ),
@@ -1196,9 +1187,6 @@ class _StaffPageState extends ConsumerState<StaffPage>
                         callerRole: callerRole,
                         phone: phoneController.text.trim().isNotEmpty
                             ? phoneController.text.trim()
-                            : null,
-                        username: usernameController.text.trim().isNotEmpty
-                            ? usernameController.text.trim()
                             : null,
                         department: deptController.text.trim(),
                         employmentStatus: selectedStatus,

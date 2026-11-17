@@ -52,17 +52,21 @@ class _MenuEditorState extends ConsumerState<MenuEditor> {
   @override
   Widget build(BuildContext context) {
     final catalog = ref.watch(catalogProvider).value;
-    final categories = catalog?.categories.isNotEmpty == true
-        ? catalog!.categories
-        : ref.watch(demoCatalogProvider).categories;
-
-    category ??= categories.firstOrNull?.id;
     final backend = ref.watch(backendProvider);
     final auth = ref.watch(authControllerProvider);
     final isLive =
         backend.status == BackendStatus.initialized &&
         auth.activeMembership?.restaurantId != null &&
-        catalog?.isDemo == false;
+        catalog?.isDemo != true;
+    final isDemo = catalog?.isDemo == true && backend.config.allowsDemo;
+
+    final categories = catalog?.categories.isNotEmpty == true
+        ? catalog!.categories
+        : (isDemo
+              ? ref.watch(demoCatalogProvider).categories
+              : <MenuCategory>[]);
+
+    category ??= categories.firstOrNull?.id;
 
     return AlertDialog(
       title: Text(widget.product == null ? 'Add menu item' : 'Edit menu item'),
@@ -84,28 +88,46 @@ class _MenuEditorState extends ConsumerState<MenuEditor> {
                     color: isLive
                         ? Theme.of(context).colorScheme.primaryContainer
                               .withAlpha(80)
-                        : Theme.of(context).colorScheme.surfaceContainerHighest,
+                        : (isDemo
+                              ? Theme.of(context)
+                                    .colorScheme
+                                    .surfaceContainerHighest
+                              : Theme.of(context).colorScheme.errorContainer
+                                    .withAlpha(80)),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
-                        isLive ? Icons.cloud_done_outlined : Icons.info_outline,
+                        isLive
+                            ? Icons.cloud_done_outlined
+                            : (isDemo
+                                  ? Icons.info_outline
+                                  : Icons.cloud_off_outlined),
                         size: 14,
                         color: isLive
                             ? Theme.of(context).colorScheme.primary
-                            : Theme.of(context).colorScheme.onSurfaceVariant,
+                            : (isDemo
+                                  ? Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant
+                                  : Theme.of(context).colorScheme.error),
                       ),
                       const SizedBox(width: 8),
                       Text(
                         isLive
                             ? 'Live Supabase Menu Item'
-                            : 'Local demo edit. No data is sent to Supabase.',
+                            : (isDemo
+                                  ? 'Demo Mode · Saves will only exist in local memory'
+                                  : 'Backend Unavailable · Live connection required'),
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           fontWeight: isLive
                               ? FontWeight.bold
                               : FontWeight.normal,
+                          color: !isLive && !isDemo
+                              ? Theme.of(context).colorScheme.error
+                              : null,
                         ),
                       ),
                     ],
@@ -222,6 +244,13 @@ class _MenuEditorState extends ConsumerState<MenuEditor> {
                   if (isLive &&
                       repo is SupabaseMenuRepository &&
                       restId != null) {
+                    if (category == null) {
+                      setState(() {
+                        isSaving = false;
+                        error = 'Please select or create a category first.';
+                      });
+                      return;
+                    }
                     try {
                       final priceMinor = parseMoney(price.text)!;
                       if (widget.product == null) {
@@ -258,28 +287,46 @@ class _MenuEditorState extends ConsumerState<MenuEditor> {
                     return;
                   }
 
-                  // Local demo save fallback
-                  final controller = ref.read(demoCatalogProvider.notifier);
-                  try {
-                    controller.save(
-                      MenuProduct(
-                        id: widget.product?.id ?? controller.newId(),
-                        categoryId: category!,
-                        name: name.text.trim(),
-                        priceMinor: parseMoney(price.text)!,
-                        description: description.text.trim(),
-                        image: image.text.trim(),
-                        available: available,
-                        featured: widget.product?.featured ?? false,
-                      ),
-                    );
-                    Navigator.pop(context);
-                  } on ArgumentError catch (_) {
-                    setState(() {
-                      isSaving = false;
-                      error = 'Please check the item details.';
-                    });
+                  // Intentional local demo save
+                  if (isDemo) {
+                    final controller = ref.read(demoCatalogProvider.notifier);
+                    try {
+                      controller.save(
+                        MenuProduct(
+                          id: widget.product?.id ?? controller.newId(),
+                          categoryId:
+                              category ??
+                              ref.read(demoCatalogProvider).categories.first.id,
+                          name: name.text.trim(),
+                          priceMinor: parseMoney(price.text)!,
+                          description: description.text.trim(),
+                          image: image.text.trim(),
+                          available: available,
+                          featured: widget.product?.featured ?? false,
+                        ),
+                      );
+                      Navigator.pop(context);
+                    } on ArgumentError catch (_) {
+                      setState(() {
+                        isSaving = false;
+                        error = 'Please check the item details.';
+                      });
+                    }
+                    return;
                   }
+
+                  // Production error when not in demo and not live
+                  setState(() {
+                    isSaving = false;
+                    if (backend.status != BackendStatus.initialized) {
+                      error =
+                          'Supabase backend is not configured: ${backend.message}';
+                    } else if (restId == null) {
+                      error = 'You must be signed in with an active restaurant membership.';
+                    } else {
+                      error = 'Live database connection is unavailable.';
+                    }
+                  });
                 },
           child: isSaving
               ? const SizedBox(
@@ -287,7 +334,11 @@ class _MenuEditorState extends ConsumerState<MenuEditor> {
                   height: 18,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
-              : Text(isLive ? 'Save item' : 'Save local item'),
+              : Text(
+                  isLive
+                      ? 'Save item'
+                      : (isDemo ? 'Save in Demo Mode' : 'Save item'),
+                ),
         ),
       ],
     );

@@ -134,7 +134,6 @@ class StaffRepository {
     required String fullName,
     required WorkspaceRole callerRole,
     String? phone,
-    String? username,
     String department = 'Front of House',
     EmploymentStatus employmentStatus = EmploymentStatus.fullTime,
   }) async {
@@ -165,19 +164,21 @@ class StaffRepository {
     };
 
     try {
-      await client!
-          .rpc(
-            'provision_staff_member',
-            params: {
-              'p_restaurant_id': restaurantId,
-              'p_user_id': targetUserId,
-              'p_role': dbRole,
-              'p_full_name': fullName.trim(),
-              'p_phone': phone?.trim(),
-              'p_username': username?.trim(),
-            },
-          )
-          .timeout(const Duration(seconds: 15));
+      // Upsert profile
+      await client!.from('user_profiles').upsert({
+        'id': targetUserId,
+        'full_name': fullName.trim(),
+        if (phone != null && phone.trim().isNotEmpty) 'phone': phone.trim(),
+        'is_active': true,
+      });
+
+      // Upsert membership (guarded by trg_enforce_membership_security)
+      await client!.from('restaurant_memberships').upsert({
+        'restaurant_id': restaurantId,
+        'user_id': targetUserId,
+        'role': dbRole,
+        'is_active': true,
+      }, onConflict: 'restaurant_id,user_id');
 
       // Create operational profile
       await client!.from('staff_profiles').upsert({

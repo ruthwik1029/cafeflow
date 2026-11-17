@@ -93,7 +93,28 @@ jobs:
         run: flutter pub get
 
       - name: Build Web Production Artifact
-        run: flutter build web --release --base-href /
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL || vars.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY }}
+          APP_ENV: ${{ vars.APP_ENV || 'production' }}
+          DEMO_MODE: ${{ vars.DEMO_MODE || 'false' }}
+        run: |
+          DART_DEFINES=""
+          if [ -n "$SUPABASE_URL" ]; then
+            DART_DEFINES="$DART_DEFINES --dart-define=SUPABASE_URL=$SUPABASE_URL"
+          fi
+          if [ -n "$SUPABASE_PUBLISHABLE_KEY" ]; then
+            if [[ "$SUPABASE_PUBLISHABLE_KEY" =~ ^sb_publishable_ ]]; then
+              DART_DEFINES="$DART_DEFINES --dart-define=SUPABASE_PUBLISHABLE_KEY=$SUPABASE_PUBLISHABLE_KEY"
+            fi
+          fi
+          if [ -n "$APP_ENV" ]; then
+            DART_DEFINES="$DART_DEFINES --dart-define=APP_ENV=$APP_ENV"
+          fi
+          if [ -n "$DEMO_MODE" ]; then
+            DART_DEFINES="$DART_DEFINES --dart-define=DEMO_MODE=$DEMO_MODE"
+          fi
+          flutter build web --release --base-href / $DART_DEFINES
 
       - name: Upload Web Artifact
         uses: actions/upload-artifact@v4
@@ -134,14 +155,32 @@ jobs:
       - name: Install Dependencies
         run: flutter pub get
 
-      - name: Build Release APK
+      - name: Build Release APK & App Bundle
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL || vars.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY }}
+          APP_ENV: ${{ vars.APP_ENV || 'production' }}
+          DEMO_MODE: ${{ vars.DEMO_MODE || 'false' }}
         run: |
-          flutter build apk --release -t lib/main_android.dart
+          DART_DEFINES=""
+          if [ -n "$SUPABASE_URL" ]; then
+            DART_DEFINES="$DART_DEFINES --dart-define=SUPABASE_URL=$SUPABASE_URL"
+          fi
+          if [ -n "$SUPABASE_PUBLISHABLE_KEY" ]; then
+            if [[ "$SUPABASE_PUBLISHABLE_KEY" =~ ^sb_publishable_ ]]; then
+              DART_DEFINES="$DART_DEFINES --dart-define=SUPABASE_PUBLISHABLE_KEY=$SUPABASE_PUBLISHABLE_KEY"
+            fi
+          fi
+          if [ -n "$APP_ENV" ]; then
+            DART_DEFINES="$DART_DEFINES --dart-define=APP_ENV=$APP_ENV"
+          fi
+          if [ -n "$DEMO_MODE" ]; then
+            DART_DEFINES="$DART_DEFINES --dart-define=DEMO_MODE=$DEMO_MODE"
+          fi
+          flutter build apk --release -t lib/main_android.dart $DART_DEFINES
           mkdir -p build/installer
           cp build/app/outputs/flutter-apk/app-release.apk build/installer/CafeFlow-Android-1.0.0.apk
-
-      - name: Build Release App Bundle (AAB)
-        run: flutter build appbundle --release -t lib/main_android.dart
+          flutter build appbundle --release -t lib/main_android.dart $DART_DEFINES
 
       - name: Upload Android Release Artifacts
         uses: actions/upload-artifact@v4
@@ -180,7 +219,29 @@ jobs:
         run: flutter pub get
 
       - name: Build Windows Desktop Release
-        run: flutter build windows --release
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL || vars.SUPABASE_URL }}
+          SUPABASE_PUBLISHABLE_KEY: ${{ secrets.SUPABASE_PUBLISHABLE_KEY || vars.SUPABASE_PUBLISHABLE_KEY }}
+          APP_ENV: ${{ vars.APP_ENV || 'production' }}
+          DEMO_MODE: ${{ vars.DEMO_MODE || 'false' }}
+        shell: pwsh
+        run: |
+          $defines = @()
+          if ($env:SUPABASE_URL) {
+            $defines += "--dart-define=SUPABASE_URL=$env:SUPABASE_URL"
+          }
+          if ($env:SUPABASE_PUBLISHABLE_KEY) {
+            if ($env:SUPABASE_PUBLISHABLE_KEY -match '^sb_publishable_') {
+              $defines += "--dart-define=SUPABASE_PUBLISHABLE_KEY=$env:SUPABASE_PUBLISHABLE_KEY"
+            }
+          }
+          if ($env:APP_ENV) {
+            $defines += "--dart-define=APP_ENV=$env:APP_ENV"
+          }
+          if ($env:DEMO_MODE) {
+            $defines += "--dart-define=DEMO_MODE=$env:DEMO_MODE"
+          }
+          flutter build windows --release @defines
 
       - name: Compile Inno Setup Windows Installer
         run: iscc windows\installer\cafeflow_installer.iss
