@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../features/auth/application/auth_controller.dart';
@@ -10,76 +11,162 @@ import '../../features/workspaces/presentation/workspace_shell.dart';
 import '../widgets/cafe_components.dart';
 import 'workspace.dart';
 
+class AuthRouterListenable extends ChangeNotifier {
+  AuthRouterListenable(ProviderContainer container) {
+    _subscription = container.listen<AuthState>(authControllerProvider, (
+      previous,
+      next,
+    ) {
+      if (previous?.status != next.status ||
+          previous?.user?.id != next.user?.id ||
+          previous?.activeMembership?.restaurantId !=
+              next.activeMembership?.restaurantId ||
+          previous?.activeMembership?.role != next.activeMembership?.role ||
+          previous?.isRestoring != next.isRestoring ||
+          previous?.isLoadingMembership != next.isLoadingMembership) {
+        notifyListeners();
+      }
+    });
+  }
+
+  late final ProviderSubscription<AuthState> _subscription;
+
+  @override
+  void dispose() {
+    _subscription.close();
+    super.dispose();
+  }
+}
+
 GoRouter createInternalRouter({
   required InternalTarget target,
   required bool demoEnabled,
   String? initialLocation,
   AuthState Function()? getAuthState,
+  Listenable? refreshListenable,
 }) {
   final workspaces = rolesFor(target).map(workspaceFor).toList();
   return GoRouter(
-    initialLocation: initialLocation ?? workspaces.first.home,
+    initialLocation:
+        initialLocation ?? (demoEnabled ? workspaces.first.home : '/login'),
+    refreshListenable: refreshListenable,
     redirect: (context, state) {
-      final auth = getAuthState?.call();
+      final auth = getAuthState?.call() ?? const AuthState();
+      final isAuth = auth.isAuthenticated;
+      final isLoginRoute = state.uri.path == '/login';
+      final isLoadingRoute = state.uri.path == '/loading';
+      final isAccessRoute = state.uri.path == '/access';
+      final isRootRoute = state.uri.path == '/';
 
-      // If live authentication state is provided
-      if (auth != null) {
-        final isAuth = auth.isAuthenticated;
-        final isLoginRoute = state.uri.path == '/login';
+      // 1. While auth state is initializing, restoring session, or loading membership
+      if (auth.isAuthorizing) {
+        return isLoadingRoute ? null : '/loading';
+      }
 
-        // Unauthenticated access
-        if (!isAuth && !demoEnabled) {
-          return isLoginRoute ? null : '/login';
+      // 2. If finished restoring/loading and currently on /loading
+      if (isLoadingRoute) {
+        if (!isAuth) {
+          return '/login';
         }
-
-        // Already authenticated user visiting login page -> redirect to permitted home
-        if (isAuth && isLoginRoute) {
-          final role = auth.activeRole ?? workspaces.first.role;
-          return workspaceFor(role).home;
+        if (auth.activeRole != null) {
+          return workspaceFor(auth.activeRole!).home;
         }
+        return demoEnabled ? workspaces.first.home : '/access';
+      }
 
-        // Role-based route guard
-        if (isAuth && auth.activeRole != null) {
-          final currentRole = auth.activeRole!;
-          final allowedHome = workspaceFor(currentRole).home;
+      // 3. Unauthenticated access guard
+      if (!isAuth && !demoEnabled) {
+        return isLoginRoute ? null : '/login';
+      }
 
-          // If the user attempts to enter a workspace route belonging to a different role
-          for (final ws in workspaceCatalog) {
-            if (ws.role != currentRole &&
-                state.uri.path.startsWith('/${ws.role.name}')) {
-              // Cashier, Kitchen, Staff cannot jump into Owner/Admin workspaces
-              if (currentRole != WorkspaceRole.owner &&
-                  currentRole != WorkspaceRole.admin) {
-                return allowedHome;
-              }
+      // 4. Authenticated user with NO verified restaurant membership or role (Production)
+      if (isAuth && auth.activeRole == null && !demoEnabled) {
+        return isAccessRoute ? null : '/access';
+      }
+
+      // 5. Authenticated user visiting /login, /access, or root when authorized with a role
+      if (isAuth &&
+          auth.activeRole != null &&
+          (isLoginRoute || isAccessRoute || isRootRoute)) {
+        return workspaceFor(auth.activeRole!).home;
+      }
+
+      // 6. Role-based route guard for authenticated users with active role
+      if (isAuth && auth.activeRole != null) {
+        final currentRole = auth.activeRole!;
+        final allowedHome = workspaceFor(currentRole).home;
+
+        // If the user attempts to enter a workspace route belonging to a different role
+        for (final ws in workspaceCatalog) {
+          if (ws.role != currentRole &&
+              state.uri.path.startsWith('/${ws.role.name}')) {
+            // Cashier, Kitchen, Staff cannot jump into Owner/Admin workspaces
+            if (currentRole != WorkspaceRole.owner &&
+                currentRole != WorkspaceRole.admin) {
+              return allowedHome;
             }
           }
         }
       }
 
-      // Legacy demo disabled guard for offline testing
-      if (!demoEnabled &&
-          state.uri.path != '/access' &&
-          state.uri.path != '/login') {
-        return '/access';
-      }
       return null;
     },
     routes: [
-      GoRoute(path: '/', redirect: (_, _) => workspaces.first.home),
+      GoRoute(
+        path: '/',
+        redirect: (_, _) => demoEnabled ? workspaces.first.home : '/login',
+      ),
+      GoRoute(
+        path: '/loading',
+        builder: (_, _) => const Scaffold(
+          body: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                SizedBox(
+                  width: 36,
+                  height: 36,
+                  child: CircularProgressIndicator(strokeWidth: 3),
+                ),
+                SizedBox(height: 16),
+                Text(
+                  'Initializing CafeFlow...',
+                  style: TextStyle(fontSize: 14, color: Colors.grey),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
       GoRoute(
         path: '/login',
         builder: (_, _) => LoginPage(demoBypassAllowed: demoEnabled),
       ),
       GoRoute(
         path: '/access',
-        builder: (_, _) => const Scaffold(
+        builder: (_, _) => Scaffold(
           body: SafeArea(
             child: PageBody(
-              child: CafeEmptyState(
-                title: 'Workspace access is not enabled',
-                message: 'Authentication and trusted role authorization are required. Sign in or enable demo mode in non-production builds.',
-                icon: Icons.lock_outline,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const CafeEmptyState(
+                    title: 'Workspace access is not enabled',
+                    message: 'Authentication and trusted role authorization are required. Sign in or enable demo mode in non-production builds.',
+                    icon: Icons.lock_outline,
+                  ),
+                  const SizedBox(height: 24),
+                  Consumer(
+                    builder: (context, ref, _) => CafeButton(
+                      label: 'Sign out',
+                      onPressed: () async {
+                        await ref
+                            .read(authControllerProvider.notifier)
+                            .logout();
+                      },
+                    ),
+                  ),
+                ],
               ),
             ),
           ),

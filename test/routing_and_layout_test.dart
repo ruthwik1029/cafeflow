@@ -195,7 +195,8 @@ void main() {
       tester,
       createInternalRouter(target: InternalTarget.windows, demoEnabled: false),
     );
-    expect(find.text('Workspace access is not enabled'), findsOneWidget);
+    expect(find.text('CafeFlow Workspace'), findsOneWidget);
+    expect(find.text('Workspace access is not enabled'), findsNothing);
   });
   testWidgets('public router rejects every internal role and design system', (
     tester,

@@ -15,16 +15,23 @@ class AuthState {
     this.user,
     this.activeMembership,
     this.errorMessage,
+    this.isRestoring = false,
+    this.isLoadingMembership = false,
   });
 
   final AuthStatus status;
   final CafeUser? user;
   final RestaurantMembershipInfo? activeMembership;
   final String? errorMessage;
+  final bool isRestoring;
+  final bool isLoadingMembership;
 
   bool get isAuthenticated =>
       status == AuthStatus.authenticated && user != null;
-  bool get isLoading => status == AuthStatus.authenticating;
+  bool get isLoading =>
+      status == AuthStatus.authenticating || isRestoring || isLoadingMembership;
+  bool get isAuthorizing => isRestoring || isLoadingMembership;
+  bool get hasActiveMembership => activeMembership != null;
   WorkspaceRole? get activeRole => activeMembership?.role;
 
   bool hasPermission(CafePermission permission) {
@@ -38,12 +45,16 @@ class AuthState {
     RestaurantMembershipInfo? activeMembership,
     String? errorMessage,
     bool clearError = false,
+    bool? isRestoring,
+    bool? isLoadingMembership,
   }) {
     return AuthState(
       status: status ?? this.status,
       user: user ?? this.user,
       activeMembership: activeMembership ?? this.activeMembership,
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
+      isRestoring: isRestoring ?? this.isRestoring,
+      isLoadingMembership: isLoadingMembership ?? this.isLoadingMembership,
     );
   }
 }
@@ -53,13 +64,22 @@ class AuthController extends Notifier<AuthState> {
 
   @override
   AuthState build() {
+    final repo = ref.watch(authRepositoryProvider);
+    if (repo == null) {
+      return const AuthState(isRestoring: false, isLoadingMembership: false);
+    }
     Future.microtask(() => init());
-    return const AuthState();
+    return const AuthState(isRestoring: true, isLoadingMembership: false);
   }
 
   Future<void> init() async {
     final repo = _repo;
-    if (repo == null) return;
+    if (repo == null) {
+      if (state.isRestoring || state.isLoadingMembership) {
+        state = state.copyWith(isRestoring: false, isLoadingMembership: false);
+      }
+      return;
+    }
     try {
       final user = await repo.restoreSession();
       if (user != null) {
@@ -70,10 +90,14 @@ class AuthController extends Notifier<AuthState> {
           status: AuthStatus.authenticated,
           user: user,
           activeMembership: membership,
+          isRestoring: false,
+          isLoadingMembership: false,
         );
+      } else {
+        state = state.copyWith(isRestoring: false, isLoadingMembership: false);
       }
     } catch (_) {
-      // Session restoration failed; remain unauthenticated
+      state = state.copyWith(isRestoring: false, isLoadingMembership: false);
     }
   }
 
@@ -83,11 +107,18 @@ class AuthController extends Notifier<AuthState> {
       state = state.copyWith(
         status: AuthStatus.error,
         errorMessage: 'Backend authentication service is not configured.',
+        isRestoring: false,
+        isLoadingMembership: false,
       );
       return false;
     }
 
-    state = state.copyWith(status: AuthStatus.authenticating, clearError: true);
+    state = state.copyWith(
+      status: AuthStatus.authenticating,
+      clearError: true,
+      isRestoring: false,
+      isLoadingMembership: false,
+    );
 
     try {
       final clean = identifier.trim();
@@ -103,15 +134,24 @@ class AuthController extends Notifier<AuthState> {
         status: AuthStatus.authenticated,
         user: user,
         activeMembership: membership,
+        isRestoring: false,
+        isLoadingMembership: false,
       );
       return true;
     } on AppFailure catch (e) {
-      state = state.copyWith(status: AuthStatus.error, errorMessage: e.message);
+      state = state.copyWith(
+        status: AuthStatus.error,
+        errorMessage: e.message,
+        isRestoring: false,
+        isLoadingMembership: false,
+      );
       return false;
     } catch (e) {
       state = state.copyWith(
         status: AuthStatus.error,
         errorMessage: 'Sign in failed. Please try again.',
+        isRestoring: false,
+        isLoadingMembership: false,
       );
       return false;
     }
@@ -122,8 +162,55 @@ class AuthController extends Notifier<AuthState> {
       await _repo?.logout();
     } finally {
       // Clear user session, tenant context, and error state
-      state = const AuthState(status: AuthStatus.unauthenticated);
+      state = const AuthState(
+        status: AuthStatus.unauthenticated,
+        isRestoring: false,
+        isLoadingMembership: false,
+      );
     }
+  }
+
+  void setMembershipLoading(bool loading) {
+    state = state.copyWith(isLoadingMembership: loading);
+  }
+
+  void revokeMembership() {
+    state = AuthState(
+      status: state.status,
+      user: state.user != null
+          ? CafeUser(
+              id: state.user!.id,
+              email: state.user!.email,
+              fullName: state.user!.fullName,
+              phone: state.user!.phone,
+              username: state.user!.username,
+              memberships: const [],
+            )
+          : null,
+      activeMembership: null,
+      isRestoring: false,
+      isLoadingMembership: false,
+    );
+  }
+
+  void updateMemberships(List<RestaurantMembershipInfo> memberships) {
+    final active = memberships.isNotEmpty ? memberships.first : null;
+    state = AuthState(
+      status: state.status,
+      user: state.user != null
+          ? CafeUser(
+              id: state.user!.id,
+              email: state.user!.email,
+              fullName: state.user!.fullName,
+              phone: state.user!.phone,
+              username: state.user!.username,
+              memberships: memberships,
+            )
+          : null,
+      activeMembership: active,
+      isRestoring: false,
+      isLoadingMembership: false,
+    );
   }
 
   void selectRestaurant(String restaurantId) {

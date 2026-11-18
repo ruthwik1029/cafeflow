@@ -9,7 +9,12 @@ import '../services/backend.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_controller.dart';
 
-Future<void> bootstrap(GoRouter Function(AppConfig) createRouter) async {
+typedef AppRouterFactory = GoRouter Function(
+  AppConfig config,
+  ProviderContainer container,
+);
+
+Future<void> bootstrap(AppRouterFactory createRouter) async {
   WidgetsFlutterBinding.ensureInitialized();
   final config = loadAppConfig();
   ThemeStore themeStore;
@@ -19,13 +24,17 @@ Future<void> bootstrap(GoRouter Function(AppConfig) createRouter) async {
     themeStore = UnavailableThemeStore();
   }
   final backend = await BackendState.initialize(config);
+  final container = ProviderContainer(
+    overrides: [
+      themeStoreProvider.overrideWithValue(themeStore),
+      backendProvider.overrideWithValue(backend),
+    ],
+  );
+  final router = createRouter(config, container);
   runApp(
-    ProviderScope(
-      overrides: [
-        themeStoreProvider.overrideWithValue(themeStore),
-        backendProvider.overrideWithValue(backend),
-      ],
-      child: CafeFlowApp(router: createRouter(config)),
+    UncontrolledProviderScope(
+      container: container,
+      child: CafeFlowApp(router: router),
     ),
   );
 }
