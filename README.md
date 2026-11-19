@@ -18,7 +18,7 @@ Get started immediately with official pre-compiled releases and the live web por
 
 > [!NOTE]
 > **Version & Release Notes:**
-> - **Application Version:** `1.0.0` (Current Published Release Tag: `v1.0.1`).
+> - **Application Version:** `1.0.0` (Build 2 / `v1.0.0+2`; latest release series `v1.0.x`).
 > - **Direct Download Guarantee:** Stable download links always resolve to the latest published release binaries verified by the CI pipeline.
 > - **Web Storefront:** Deployed continuously to Vercel with automated single-page routing and HTTP security headers.
 
