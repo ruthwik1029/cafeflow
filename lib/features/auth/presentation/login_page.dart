@@ -6,17 +6,20 @@ import '../../../core/routing/workspace.dart';
 import '../../../core/services/backend.dart';
 import '../../../core/widgets/cafe_components.dart';
 import '../../workspaces/domain/workspace_catalog.dart';
+import '../../workspaces/presentation/demo_workspace_dialog.dart';
 import '../application/auth_controller.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
   const LoginPage({
     this.initialIdentifier = '',
     this.demoBypassAllowed = false,
+    this.target = InternalTarget.windows,
     super.key,
   });
 
   final String initialIdentifier;
   final bool demoBypassAllowed;
+  final InternalTarget target;
 
   @override
   ConsumerState<LoginPage> createState() => _LoginPageState();
@@ -309,13 +312,111 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
                       // Non-production demo bypass option
                       if (widget.demoBypassAllowed) ...[
-                        const SizedBox(height: 16),
-                        TextButton.icon(
-                          icon: const Icon(Icons.developer_mode, size: 18),
-                          label: const Text('Continue in Offline Demo Mode'),
-                          onPressed: () {
-                            context.go(workspaceFor(WorkspaceRole.admin).home);
-                          },
+                        const SizedBox(height: 20),
+                        Row(
+                          children: [
+                            const Expanded(child: Divider()),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                              ),
+                              child: Text(
+                                'OR',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 1,
+                                  color: Theme.of(context).colorScheme.outline,
+                                ),
+                              ),
+                            ),
+                            const Expanded(child: Divider()),
+                          ],
+                        ),
+                        const SizedBox(height: 18),
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .surfaceContainerHighest
+                                .withAlpha(120),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .outlineVariant,
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.smart_toy_outlined,
+                                    size: 18,
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .primary,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      'Demonstration Experience',
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.bold,
+                                        color: Theme.of(context)
+                                            .colorScheme
+                                            .onSurface,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Explore CafeFlow without credentials. Uses isolated in-memory sample fixtures.',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  height: 1.35,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onSurfaceVariant,
+                                ),
+                              ),
+                              const SizedBox(height: 14),
+                              FilledButton.tonalIcon(
+                                style: FilledButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 12,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                                icon: const Icon(
+                                  Icons.rocket_launch_outlined,
+                                  size: 18,
+                                ),
+                                label: const Text(
+                                  'Enter Demo Mode',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                onPressed: () {
+                                  DemoWorkspaceDialog.show(
+                                    context,
+                                    isAndroid:
+                                        widget.target == InternalTarget.android,
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
                         ),
                       ],
                     ],

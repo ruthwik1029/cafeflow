@@ -432,7 +432,8 @@ void main() {
           find.textContaining('Supabase backend is unavailable'),
           findsOneWidget,
         );
-        expect(find.text('Continue in Offline Demo Mode'), findsNothing);
+        expect(find.text('Enter Demo Mode'), findsNothing);
+        expect(find.text('Demonstration Experience'), findsNothing);
 
         // Cannot bypass to workspaces
         router.go('/owner/overview');

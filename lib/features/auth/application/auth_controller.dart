@@ -2,6 +2,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/errors/app_failure.dart';
 import '../../../core/routing/workspace.dart';
+import '../../../core/services/backend.dart';
+import '../../../core/services/demo_session_service.dart';
 import '../data/supabase_auth_repository.dart';
 import '../domain/auth_repository.dart';
 import '../domain/auth_user.dart';
@@ -17,6 +19,9 @@ class AuthState {
     this.errorMessage,
     this.isRestoring = false,
     this.isLoadingMembership = false,
+    this.isDemoSession = false,
+    this.demoSessionId,
+    this.demoPairingCode,
   });
 
   final AuthStatus status;
@@ -25,6 +30,9 @@ class AuthState {
   final String? errorMessage;
   final bool isRestoring;
   final bool isLoadingMembership;
+  final bool isDemoSession;
+  final String? demoSessionId;
+  final String? demoPairingCode;
 
   bool get isAuthenticated =>
       status == AuthStatus.authenticated && user != null;
@@ -47,6 +55,9 @@ class AuthState {
     bool clearError = false,
     bool? isRestoring,
     bool? isLoadingMembership,
+    bool? isDemoSession,
+    String? demoSessionId,
+    String? demoPairingCode,
   }) {
     return AuthState(
       status: status ?? this.status,
@@ -55,6 +66,9 @@ class AuthState {
       errorMessage: clearError ? null : (errorMessage ?? this.errorMessage),
       isRestoring: isRestoring ?? this.isRestoring,
       isLoadingMembership: isLoadingMembership ?? this.isLoadingMembership,
+      isDemoSession: isDemoSession ?? this.isDemoSession,
+      demoSessionId: demoSessionId ?? this.demoSessionId,
+      demoPairingCode: demoPairingCode ?? this.demoPairingCode,
     );
   }
 }
@@ -86,19 +100,94 @@ class AuthController extends Notifier<AuthState> {
         final membership = user.memberships.isNotEmpty
             ? user.memberships.first
             : null;
+        final demoSession = ref.read(demoSessionServiceProvider).currentSession;
         state = AuthState(
           status: AuthStatus.authenticated,
           user: user,
           activeMembership: membership,
+          isDemoSession: demoSession != null,
+          demoSessionId: demoSession?.sessionId,
+          demoPairingCode: demoSession?.pairingCode,
           isRestoring: false,
           isLoadingMembership: false,
         );
-      } else {
-        state = state.copyWith(isRestoring: false, isLoadingMembership: false);
+        return;
       }
+
+      // If backend client is live & initialized, connect ephemeral demo session on cold start
+      final backend = ref.read(backendProvider);
+      if (backend.status == BackendStatus.initialized &&
+          backend.client != null &&
+          backend.config.allowsDemo &&
+          state.status == AuthStatus.unauthenticated &&
+          state.errorMessage == null) {
+        final connected = await enterLiveDemoSession();
+        if (connected) return;
+      }
+
+      state = state.copyWith(isRestoring: false, isLoadingMembership: false);
     } catch (_) {
       state = state.copyWith(isRestoring: false, isLoadingMembership: false);
     }
+  }
+
+  /// Establishes an ephemeral live Supabase demo session.
+  Future<bool> enterLiveDemoSession({
+    String? pairingCode,
+    bool forceNew = false,
+  }) async {
+    final config = ref.read(appConfigProvider);
+    if (!config.allowsDemo) return false;
+
+    final backend = ref.read(backendProvider);
+    if (backend.status != BackendStatus.initialized || backend.client == null) {
+      return false;
+    }
+
+    final demoService = ref.read(demoSessionServiceProvider);
+    state = state.copyWith(isLoadingMembership: true);
+    try {
+      final session = await demoService.provisionOrRestoreSession(
+        pairingCode: pairingCode,
+        forceNew: forceNew,
+      );
+      if (session != null) {
+        final repo = _repo;
+        final user = await repo?.restoreSession();
+        final membership = (user != null && user.memberships.isNotEmpty)
+            ? user.memberships.first
+            : RestaurantMembershipInfo(
+                restaurantId: session.restaurantId,
+                restaurantName: 'Flagship Bistro',
+                role: WorkspaceRole.owner,
+              );
+
+        state = AuthState(
+          status: AuthStatus.authenticated,
+          user:
+              user ??
+              CafeUser(
+                id: session.sessionId,
+                email: 'demo@cafeflow.internal',
+                fullName: 'Demonstrator (Owner)',
+                phone: '',
+                username: 'demo_user',
+                memberships: [membership],
+              ),
+          activeMembership: membership,
+          isDemoSession: true,
+          demoSessionId: session.sessionId,
+          demoPairingCode: session.pairingCode,
+          isRestoring: false,
+          isLoadingMembership: false,
+        );
+        return true;
+      }
+    } catch (_) {
+      // Graceful fallback to offline demo simulation
+    }
+    state = state.copyWith(isLoadingMembership: false);
+    return false;
   }
 
   Future<bool> login(String identifier, String password) async {
@@ -159,6 +248,9 @@ class AuthController extends Notifier<AuthState> {
 
   Future<void> logout() async {
     try {
+      if (state.isDemoSession) {
+        await ref.read(demoSessionServiceProvider).endDemoSession();
+      }
       await _repo?.logout();
     } finally {
       // Clear user session, tenant context, and error state

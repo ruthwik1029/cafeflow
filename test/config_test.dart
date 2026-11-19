@@ -11,16 +11,26 @@ void main() {
     expect(result.status, BackendStatus.unconfigured);
     expect(result.client, isNull);
   });
-  test(
-    'valid public configuration is accepted without claiming a connection',
-    () {
-      expect(
-        const AppConfig(supabaseUrl: url, publishableKey: key).validate(),
-        isNull,
-      );
-    },
-  );
+  test('valid public configuration is accepted without claiming a connection', () {
+    expect(
+      const AppConfig(supabaseUrl: url, publishableKey: key).validate(),
+      isNull,
+    );
+
+    // Legacy Supabase anon JWT is accepted
+    const legacyAnonJwt =
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRlc3QtcHJvamVjdCIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzAwMDAwMDAwLCJleHAiOjIwMDAwMDAwMDB9.signature123';
+    expect(
+      const AppConfig(
+        supabaseUrl: url,
+        publishableKey: legacyAnonJwt,
+      ).validate(),
+      isNull,
+    );
+  });
   test('partial and unsafe configuration fails closed', () async {
+    const privilegedServiceRoleJwt =
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRlc3QtcHJvamVjdCIsInJvbGUiOiJzZXJ2aWNlX3JvbGUiLCJpYXQiOjE3MDAwMDAwMDAsImV4cCI6MjAwMDAwMDAwMH0.signature123';
     for (final config in [
       const AppConfig(supabaseUrl: url),
       const AppConfig(publishableKey: key),
@@ -38,6 +48,10 @@ void main() {
         publishableKey: 'sb_secret_test_fixture',
       ),
       const AppConfig(supabaseUrl: url, publishableKey: 'eyJ.privileged.jwt'),
+      const AppConfig(
+        supabaseUrl: url,
+        publishableKey: privilegedServiceRoleJwt,
+      ),
       const AppConfig(environment: 'unknown'),
     ]) {
       final result = await BackendState.initialize(config);

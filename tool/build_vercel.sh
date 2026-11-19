@@ -54,11 +54,11 @@ if [ -n "${SUPABASE_URL}" ]; then
     DART_DEFINES="${DART_DEFINES} --dart-define=SUPABASE_URL=${SUPABASE_URL}"
 fi
 if [ -n "${SUPABASE_PUBLISHABLE_KEY}" ]; then
-    # Security guard: only accept public publishable keys starting with sb_publishable_
-    if [[ "${SUPABASE_PUBLISHABLE_KEY}" =~ ^sb_publishable_ ]]; then
+    # Security guard: only accept public publishable keys (sb_publishable_ or anon JWT)
+    if [[ "${SUPABASE_PUBLISHABLE_KEY}" =~ ^sb_publishable_ ]] || [[ "${SUPABASE_PUBLISHABLE_KEY}" =~ ^eyJ ]]; then
         DART_DEFINES="${DART_DEFINES} --dart-define=SUPABASE_PUBLISHABLE_KEY=${SUPABASE_PUBLISHABLE_KEY}"
     else
-        echo "⚠ WARNING: SUPABASE_PUBLISHABLE_KEY does not start with sb_publishable_; omitting to prevent privileged token exposure."
+        echo "⚠ WARNING: SUPABASE_PUBLISHABLE_KEY does not start with sb_publishable_ or eyJ; omitting to prevent privileged token exposure."
     fi
 fi
 if [ -n "${APP_ENV}" ]; then

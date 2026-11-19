@@ -66,7 +66,7 @@ GoRouter createInternalRouter({
       // 2. If finished restoring/loading and currently on /loading
       if (isLoadingRoute) {
         if (!isAuth) {
-          return '/login';
+          return demoEnabled ? workspaces.first.home : '/login';
         }
         if (auth.activeRole != null) {
           return workspaceFor(auth.activeRole!).home;
@@ -140,7 +140,8 @@ GoRouter createInternalRouter({
       ),
       GoRoute(
         path: '/login',
-        builder: (_, _) => LoginPage(demoBypassAllowed: demoEnabled),
+        builder: (_, _) =>
+            LoginPage(demoBypassAllowed: demoEnabled, target: target),
       ),
       GoRoute(
         path: '/access',

@@ -181,9 +181,11 @@ class SupabaseAuthRepository implements AuthRepository {
         final rawRole = (row['role'] as String? ?? 'STAFF').toUpperCase();
         final role = switch (rawRole) {
           'OWNER' => WorkspaceRole.owner,
+          'DEMO_OWNER' => WorkspaceRole.owner,
           'ADMIN' => WorkspaceRole.admin,
           'CASHIER' => WorkspaceRole.cashier,
           'KITCHEN' => WorkspaceRole.kitchen,
+          'DEMO_STAFF' => WorkspaceRole.staff,
           'STAFF' => WorkspaceRole.staff,
           _ => WorkspaceRole.staff,
         };

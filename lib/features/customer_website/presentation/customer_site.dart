@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/services/backend.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/cafe_components.dart';
+import '../../billing/application/cart_controller.dart';
 import '../../menu/presentation/catalog_browser.dart';
+import 'customer_cart_bar.dart';
+import 'customer_checkout_sheet.dart';
 
 const _links = {
   '/': 'Home',
@@ -12,12 +17,14 @@ const _links = {
   '/contact': 'Visit us',
 };
 
-class CustomerShell extends StatelessWidget {
+class CustomerShell extends ConsumerWidget {
   const CustomerShell({required this.location, required this.child, super.key});
   final String location;
   final Widget child;
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final backend = ref.watch(backendProvider);
+    final isLive = backend.status == BackendStatus.initialized;
     final wide =
         MediaQuery.sizeOf(context).width >= 850 &&
         MediaQuery.textScalerOf(context).scale(14) <= 21;
@@ -56,6 +63,17 @@ class CustomerShell extends StatelessWidget {
                         ),
                       ),
                   const SizedBox(width: 8),
+                  StatusPill(
+                    wide
+                        ? (isLive
+                              ? 'Live · Flagship Bistro'
+                              : 'Offline Simulation')
+                        : (isLive ? 'Live' : 'Offline'),
+                    icon: isLive
+                        ? Icons.cloud_done_outlined
+                        : Icons.cloud_off_outlined,
+                  ),
+                  const SizedBox(width: 8),
                   const ThemeControl(),
                   if (!wide)
                     PopupMenuButton<String>(
@@ -76,6 +94,7 @@ class CustomerShell extends StatelessWidget {
             ),
             const Divider(height: 1),
             Expanded(child: SingleChildScrollView(child: child)),
+            const CustomerCartBar(),
           ],
         ),
       ),
@@ -227,11 +246,11 @@ class CustomerHome extends StatelessWidget {
   );
 }
 
-class CustomerMenuPage extends StatelessWidget {
+class CustomerMenuPage extends ConsumerWidget {
   const CustomerMenuPage({super.key});
 
   @override
-  Widget build(BuildContext context) => PageBody(
+  Widget build(BuildContext context, WidgetRef ref) => PageBody(
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -242,7 +261,22 @@ class CustomerMenuPage extends StatelessWidget {
           'All items prepared fresh in-house. Prices are inclusive of all taxes.',
         ),
         const SizedBox(height: 28),
-        const CatalogBrowser(),
+        CatalogBrowser(
+          onSelect: (product) {
+            ref.read(cartProvider('customer').notifier).add(product);
+            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Added "${product.name}" to cart.'),
+                duration: const Duration(seconds: 2),
+                action: SnackBarAction(
+                  label: 'View Cart',
+                  onPressed: () => CustomerCheckoutSheet.show(context),
+                ),
+              ),
+            );
+          },
+        ),
         const SizedBox(height: 48),
         const _CustomerFooter(),
       ],

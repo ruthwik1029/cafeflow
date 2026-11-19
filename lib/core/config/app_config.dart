@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 enum AppEnvironment { development, staging, production }
 
 /// These values are public in a compiled client. Never place secrets here.
@@ -24,6 +26,48 @@ class AppConfig {
       supabaseUrl.isNotEmpty || publishableKey.isNotEmpty;
   bool get allowsDemo => demoMode && environment != 'production';
 
+  static bool _isValidPublishableKey(String key) {
+    if (RegExp(r'^sb_publishable_[A-Za-z0-9_-]+$').hasMatch(key)) {
+      return true;
+    }
+    // Support legacy Supabase anon JWTs while strictly forbidding service_role
+    if (RegExp(r'^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$')
+        .hasMatch(key)) {
+      return _isLegacyAnonJwt(key);
+    }
+    return false;
+  }
+
+  static bool _isLegacyAnonJwt(String token) {
+    final parts = token.split('.');
+    if (parts.length != 3) return false;
+    try {
+      var payload = parts[1];
+      final remainder = payload.length % 4;
+      if (remainder == 2) {
+        payload += '==';
+      } else if (remainder == 3) {
+        payload += '=';
+      } else if (remainder == 1) {
+        return false;
+      }
+      final decodedBytes = base64Url.decode(payload);
+      final decoded = utf8.decode(decodedBytes);
+      // Strictly forbid service_role or admin tokens
+      if (decoded.contains('service_role') ||
+          decoded.contains('supabase_admin')) {
+        return false;
+      }
+      final json = jsonDecode(decoded);
+      if (json is Map && json['role'] == 'anon') {
+        return true;
+      }
+      return false;
+    } catch (_) {
+      return false;
+    }
+  }
+
   String? validate() {
     if (!AppEnvironment.values.any((value) => value.name == environment)) {
       return 'APP_ENV must be development, staging, or production.';
@@ -42,7 +86,7 @@ class AppConfig {
         (uri.path.isNotEmpty && uri.path != '/')) {
       return 'SUPABASE_URL must be an HTTPS project origin.';
     }
-    if (!RegExp(r'^sb_publishable_[A-Za-z0-9_-]+$').hasMatch(publishableKey)) {
+    if (!_isValidPublishableKey(publishableKey)) {
       return 'Supply a Supabase publishable key; privileged keys are forbidden.';
     }
     return null;

@@ -7,17 +7,12 @@
 -- ----------------------------------------------------------------------------
 -- 1. Extend stock_movement_type Enum
 -- ----------------------------------------------------------------------------
-DO $$
-BEGIN
-    ALTER TYPE public.stock_movement_type ADD VALUE IF NOT EXISTS 'SALE_CONSUMPTION';
-    ALTER TYPE public.stock_movement_type ADD VALUE IF NOT EXISTS 'MANUAL_ADJUSTMENT';
-    ALTER TYPE public.stock_movement_type ADD VALUE IF NOT EXISTS 'DAMAGE';
-    ALTER TYPE public.stock_movement_type ADD VALUE IF NOT EXISTS 'RETURN';
-    ALTER TYPE public.stock_movement_type ADD VALUE IF NOT EXISTS 'TRANSFER';
-    ALTER TYPE public.stock_movement_type ADD VALUE IF NOT EXISTS 'REVERSAL';
-EXCEPTION
-    WHEN duplicate_object THEN NULL;
-END $$;
+ALTER TYPE public.stock_movement_type ADD VALUE IF NOT EXISTS 'SALE_CONSUMPTION';
+ALTER TYPE public.stock_movement_type ADD VALUE IF NOT EXISTS 'MANUAL_ADJUSTMENT';
+ALTER TYPE public.stock_movement_type ADD VALUE IF NOT EXISTS 'DAMAGE';
+ALTER TYPE public.stock_movement_type ADD VALUE IF NOT EXISTS 'RETURN';
+ALTER TYPE public.stock_movement_type ADD VALUE IF NOT EXISTS 'TRANSFER';
+ALTER TYPE public.stock_movement_type ADD VALUE IF NOT EXISTS 'REVERSAL';
 
 -- ----------------------------------------------------------------------------
 -- 2. Suppliers Table
@@ -808,116 +803,141 @@ ALTER TABLE public.shifts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.staff_attendance ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.staff_audit_events ENABLE ROW LEVEL SECURITY;
 
+-- Compatibility Shim: single-role check delegation wrapper
+CREATE OR REPLACE FUNCTION public.has_restaurant_role(target_restaurant_id UUID, required_role app_role)
+RETURNS BOOLEAN
+SECURITY DEFINER
+SET search_path = public, pg_temp
+LANGUAGE sql STABLE AS $$
+    SELECT public.has_role(target_restaurant_id, ARRAY[required_role]);
+$$;
+
+REVOKE ALL ON FUNCTION public.has_restaurant_role(UUID, app_role) FROM public;
+GRANT EXECUTE ON FUNCTION public.has_restaurant_role(UUID, app_role) TO authenticated, anon;
+
 -- suppliers
+DROP POLICY IF EXISTS "Suppliers read by tenant members" ON public.suppliers;
 CREATE POLICY "Suppliers read by tenant members"
     ON public.suppliers FOR SELECT
     USING (public.is_restaurant_member(restaurant_id));
 
+DROP POLICY IF EXISTS "Suppliers manage by Owner and Admin" ON public.suppliers;
 CREATE POLICY "Suppliers manage by Owner and Admin"
     ON public.suppliers FOR ALL
-    USING (public.has_restaurant_role(restaurant_id, 'ADMIN'::app_role))
-    WITH CHECK (public.has_restaurant_role(restaurant_id, 'ADMIN'::app_role));
+    USING (public.has_role(restaurant_id, ARRAY['OWNER'::app_role, 'ADMIN'::app_role]))
+    WITH CHECK (public.has_role(restaurant_id, ARRAY['OWNER'::app_role, 'ADMIN'::app_role]));
 
 -- purchases
+DROP POLICY IF EXISTS "Purchases read by Owner and Admin" ON public.purchases;
 CREATE POLICY "Purchases read by Owner and Admin"
     ON public.purchases FOR SELECT
-    USING (public.has_restaurant_role(restaurant_id, 'ADMIN'::app_role));
+    USING (public.has_role(restaurant_id, ARRAY['OWNER'::app_role, 'ADMIN'::app_role]));
 
+DROP POLICY IF EXISTS "Purchases manage by Owner and Admin" ON public.purchases;
 CREATE POLICY "Purchases manage by Owner and Admin"
     ON public.purchases FOR ALL
-    USING (public.has_restaurant_role(restaurant_id, 'ADMIN'::app_role))
-    WITH CHECK (public.has_restaurant_role(restaurant_id, 'ADMIN'::app_role));
+    USING (public.has_role(restaurant_id, ARRAY['OWNER'::app_role, 'ADMIN'::app_role]))
+    WITH CHECK (public.has_role(restaurant_id, ARRAY['OWNER'::app_role, 'ADMIN'::app_role]));
 
 -- purchase_items
+DROP POLICY IF EXISTS "Purchase items read by Owner and Admin" ON public.purchase_items;
 CREATE POLICY "Purchase items read by Owner and Admin"
     ON public.purchase_items FOR SELECT
     USING (
         EXISTS (
             SELECT 1 FROM public.purchases p
             WHERE p.id = purchase_id
-              AND public.has_restaurant_role(p.restaurant_id, 'ADMIN'::app_role)
+              AND public.has_role(p.restaurant_id, ARRAY['OWNER'::app_role, 'ADMIN'::app_role])
         )
     );
 
+DROP POLICY IF EXISTS "Purchase items manage by Owner and Admin" ON public.purchase_items;
 CREATE POLICY "Purchase items manage by Owner and Admin"
     ON public.purchase_items FOR ALL
     USING (
         EXISTS (
             SELECT 1 FROM public.purchases p
             WHERE p.id = purchase_id
-              AND public.has_restaurant_role(p.restaurant_id, 'ADMIN'::app_role)
+              AND public.has_role(p.restaurant_id, ARRAY['OWNER'::app_role, 'ADMIN'::app_role])
         )
     )
     WITH CHECK (
         EXISTS (
             SELECT 1 FROM public.purchases p
             WHERE p.id = purchase_id
-              AND public.has_restaurant_role(p.restaurant_id, 'ADMIN'::app_role)
+              AND public.has_role(p.restaurant_id, ARRAY['OWNER'::app_role, 'ADMIN'::app_role])
         )
     );
 
 -- menu_item_ingredients
+DROP POLICY IF EXISTS "Recipes read by tenant members" ON public.menu_item_ingredients;
 CREATE POLICY "Recipes read by tenant members"
     ON public.menu_item_ingredients FOR SELECT
     USING (public.is_restaurant_member(restaurant_id));
 
+DROP POLICY IF EXISTS "Recipes manage by Owner, Admin and Kitchen" ON public.menu_item_ingredients;
 CREATE POLICY "Recipes manage by Owner, Admin and Kitchen"
     ON public.menu_item_ingredients FOR ALL
     USING (
-        public.has_restaurant_role(restaurant_id, 'ADMIN'::app_role)
-        OR public.has_restaurant_role(restaurant_id, 'KITCHEN'::app_role)
+        public.has_role(restaurant_id, ARRAY['OWNER'::app_role, 'ADMIN'::app_role, 'KITCHEN'::app_role])
     )
     WITH CHECK (
-        public.has_restaurant_role(restaurant_id, 'ADMIN'::app_role)
-        OR public.has_restaurant_role(restaurant_id, 'KITCHEN'::app_role)
+        public.has_role(restaurant_id, ARRAY['OWNER'::app_role, 'ADMIN'::app_role, 'KITCHEN'::app_role])
     );
 
 -- staff_profiles
+DROP POLICY IF EXISTS "Staff profiles read by Owner, Admin or self" ON public.staff_profiles;
 CREATE POLICY "Staff profiles read by Owner, Admin or self"
     ON public.staff_profiles FOR SELECT
     USING (
-        public.has_restaurant_role(restaurant_id, 'ADMIN'::app_role)
+        public.has_role(restaurant_id, ARRAY['OWNER'::app_role, 'ADMIN'::app_role])
         OR user_id = auth.uid()
     );
 
+DROP POLICY IF EXISTS "Staff profiles manage by Owner and Admin" ON public.staff_profiles;
 CREATE POLICY "Staff profiles manage by Owner and Admin"
     ON public.staff_profiles FOR ALL
-    USING (public.has_restaurant_role(restaurant_id, 'ADMIN'::app_role))
-    WITH CHECK (public.has_restaurant_role(restaurant_id, 'ADMIN'::app_role));
+    USING (public.has_role(restaurant_id, ARRAY['OWNER'::app_role, 'ADMIN'::app_role]))
+    WITH CHECK (public.has_role(restaurant_id, ARRAY['OWNER'::app_role, 'ADMIN'::app_role]));
 
 -- shifts
+DROP POLICY IF EXISTS "Shifts read by tenant members" ON public.shifts;
 CREATE POLICY "Shifts read by tenant members"
     ON public.shifts FOR SELECT
     USING (public.is_restaurant_member(restaurant_id));
 
+DROP POLICY IF EXISTS "Shifts manage by Owner and Admin" ON public.shifts;
 CREATE POLICY "Shifts manage by Owner and Admin"
     ON public.shifts FOR ALL
-    USING (public.has_restaurant_role(restaurant_id, 'ADMIN'::app_role))
-    WITH CHECK (public.has_restaurant_role(restaurant_id, 'ADMIN'::app_role));
+    USING (public.has_role(restaurant_id, ARRAY['OWNER'::app_role, 'ADMIN'::app_role]))
+    WITH CHECK (public.has_role(restaurant_id, ARRAY['OWNER'::app_role, 'ADMIN'::app_role]));
 
 -- staff_attendance
+DROP POLICY IF EXISTS "Attendance read by Owner, Admin or self" ON public.staff_attendance;
 CREATE POLICY "Attendance read by Owner, Admin or self"
     ON public.staff_attendance FOR SELECT
     USING (
-        public.has_restaurant_role(restaurant_id, 'ADMIN'::app_role)
+        public.has_role(restaurant_id, ARRAY['OWNER'::app_role, 'ADMIN'::app_role])
         OR user_id = auth.uid()
     );
 
+DROP POLICY IF EXISTS "Attendance manage by Owner, Admin or self" ON public.staff_attendance;
 CREATE POLICY "Attendance manage by Owner, Admin or self"
     ON public.staff_attendance FOR ALL
     USING (
-        public.has_restaurant_role(restaurant_id, 'ADMIN'::app_role)
+        public.has_role(restaurant_id, ARRAY['OWNER'::app_role, 'ADMIN'::app_role])
         OR user_id = auth.uid()
     )
     WITH CHECK (
-        public.has_restaurant_role(restaurant_id, 'ADMIN'::app_role)
+        public.has_role(restaurant_id, ARRAY['OWNER'::app_role, 'ADMIN'::app_role])
         OR user_id = auth.uid()
     );
 
 -- staff_audit_events
+DROP POLICY IF EXISTS "Audit events read by Owner and Admin" ON public.staff_audit_events;
 CREATE POLICY "Audit events read by Owner and Admin"
     ON public.staff_audit_events FOR SELECT
-    USING (public.has_restaurant_role(restaurant_id, 'ADMIN'::app_role));
+    USING (public.has_role(restaurant_id, ARRAY['OWNER'::app_role, 'ADMIN'::app_role]));
 
 -- ----------------------------------------------------------------------------
 -- 14. Realtime Publications

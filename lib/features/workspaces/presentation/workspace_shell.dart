@@ -3,10 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/routing/workspace.dart';
-import '../../../core/services/backend.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/cafe_components.dart';
 import '../../auth/application/auth_controller.dart';
+import 'demo_channel_pairing_dialog.dart';
 
 class WorkspaceShell extends ConsumerWidget {
   const WorkspaceShell({
@@ -24,9 +24,7 @@ class WorkspaceShell extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final wide = MediaQuery.sizeOf(context).width >= CafeSpace.desktop;
-    final backend = ref.watch(backendProvider);
     final auth = ref.watch(authControllerProvider);
-    final isLive = backend.status == BackendStatus.initialized;
     final isAuth = auth.isAuthenticated;
 
     return Scaffold(
@@ -74,19 +72,61 @@ class WorkspaceShell extends ConsumerWidget {
                           Padding(
                             padding: const EdgeInsets.only(right: 16),
                             child: isAuth
-                                ? StatusPill(
-                                    'Live · ${auth.activeMembership?.restaurantName ?? 'Flagship Bistro'}',
-                                    icon: Icons.cloud_done_rounded,
-                                  )
-                                : isLive
-                                ? const StatusPill(
-                                    'Supabase Connected',
-                                    icon: Icons.cloud_outlined,
+                                ? InkWell(
+                                    borderRadius: BorderRadius.circular(20),
+                                    onTap:
+                                        auth.isDemoSession &&
+                                            auth.demoPairingCode != null
+                                        ? () => DemoChannelPairingDialog.show(
+                                            context,
+                                            pairingCode: auth.demoPairingCode!,
+                                            restaurantId:
+                                                auth
+                                                    .activeMembership
+                                                    ?.restaurantId ??
+                                                'a0000000-0000-0000-0000-000000000001',
+                                          )
+                                        : null,
+                                    child: StatusPill(
+                                      auth.isDemoSession
+                                          ? 'LIVE DEMO · ${auth.demoPairingCode != null ? 'Channel: ${auth.demoPairingCode}' : 'Connected'}'
+                                          : 'Live · ${auth.activeMembership?.restaurantName ?? 'Flagship Bistro'}',
+                                      icon: auth.isDemoSession
+                                          ? Icons.sensors_rounded
+                                          : Icons.cloud_done_rounded,
+                                    ),
                                   )
                                 : const StatusPill(
-                                    'Development preview',
-                                    icon: Icons.code_rounded,
+                                    'DEMO MODE · OFFLINE SIMULATION',
+                                    icon: Icons.smart_toy_outlined,
                                   ),
+                          ),
+                        if (!wide)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(16),
+                              onTap:
+                                  auth.isDemoSession &&
+                                      auth.demoPairingCode != null
+                                  ? () => DemoChannelPairingDialog.show(
+                                      context,
+                                      pairingCode: auth.demoPairingCode!,
+                                      restaurantId:
+                                          auth.activeMembership?.restaurantId ?? 'a0000000-0000-0000-0000-000000000001',
+                                    )
+                                  : null,
+                              child: StatusPill(
+                                auth.isDemoSession
+                                    ? 'DEMO · ${auth.demoPairingCode ?? 'LIVE'}'
+                                    : (isAuth ? 'LIVE' : 'DEMO'),
+                                icon: auth.isDemoSession
+                                    ? Icons.sensors_rounded
+                                    : (isAuth
+                                          ? Icons.cloud_done_rounded
+                                          : Icons.smart_toy_outlined),
+                              ),
+                            ),
                           ),
                         const ThemeControl(),
                       ],
@@ -107,9 +147,7 @@ class WorkspaceShell extends ConsumerWidget {
     WidgetRef ref, {
     bool drawer = false,
   }) {
-    final backend = ref.watch(backendProvider);
     final auth = ref.watch(authControllerProvider);
-    final isLive = backend.status == BackendStatus.initialized;
     final isAuth = auth.isAuthenticated;
 
     void go(String path) {
@@ -215,27 +253,35 @@ class WorkspaceShell extends ConsumerWidget {
                         },
                       ),
                     ] else ...[
-                      Text(
-                        'Different roles. One flow.',
-                        style: Theme.of(context).textTheme.labelLarge,
+                      Row(
+                        children: [
+                          Icon(
+                            Icons.smart_toy_outlined,
+                            size: 16,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            'DEMO MODE',
+                            style: Theme.of(context).textTheme.labelMedium
+                                ?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 1.2,
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 4),
                       Text(
-                        isLive
-                            ? 'Connected to Supabase. Sign in for live syncing.'
-                            : 'Preview a workspace. This is not an authenticated session.',
-                        style: const TextStyle(fontSize: 12, height: 1.5),
+                        'Offline simulation · isolated in-memory sample data.',
+                        style: TextStyle(
+                          fontSize: 11,
+                          height: 1.4,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
                       ),
                       const SizedBox(height: 12),
-                      FilledButton.tonalIcon(
-                        style: FilledButton.styleFrom(
-                          minimumSize: const Size.fromHeight(36),
-                        ),
-                        icon: const Icon(Icons.login_rounded, size: 16),
-                        label: const Text('Sign In to Account'),
-                        onPressed: () => go('/login'),
-                      ),
-                      const SizedBox(height: 8),
                       PopupMenuButton<WorkspaceDefinition>(
                         tooltip: 'Switch demo workspace',
                         onSelected: (value) => go(value.home),
@@ -247,8 +293,19 @@ class WorkspaceShell extends ConsumerWidget {
                               ),
                             )
                             .toList(),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                          decoration: BoxDecoration(
+                            border: Border.all(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .outlineVariant,
+                            ),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
                           child: Row(
                             children: [
                               const Icon(Icons.swap_horiz_rounded, size: 18),
@@ -256,12 +313,23 @@ class WorkspaceShell extends ConsumerWidget {
                               Expanded(
                                 child: Text(
                                   'Switch workspace',
-                                  style: Theme.of(context).textTheme.bodySmall,
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(fontWeight: FontWeight.w600),
                                 ),
                               ),
+                              const Icon(Icons.arrow_drop_down, size: 18),
                             ],
                           ),
                         ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextButton.icon(
+                        style: TextButton.styleFrom(
+                          minimumSize: const Size.fromHeight(32),
+                        ),
+                        icon: const Icon(Icons.login_rounded, size: 16),
+                        label: const Text('Exit Demo / Sign In'),
+                        onPressed: () => go('/login'),
                       ),
                     ],
                   ],

@@ -104,7 +104,7 @@ jobs:
             DART_DEFINES="$DART_DEFINES --dart-define=SUPABASE_URL=$SUPABASE_URL"
           fi
           if [ -n "$SUPABASE_PUBLISHABLE_KEY" ]; then
-            if [[ "$SUPABASE_PUBLISHABLE_KEY" =~ ^sb_publishable_ ]]; then
+            if [[ "$SUPABASE_PUBLISHABLE_KEY" =~ ^sb_publishable_ ]] || [[ "$SUPABASE_PUBLISHABLE_KEY" =~ ^eyJ ]]; then
               DART_DEFINES="$DART_DEFINES --dart-define=SUPABASE_PUBLISHABLE_KEY=$SUPABASE_PUBLISHABLE_KEY"
             fi
           fi
@@ -167,7 +167,7 @@ jobs:
             DART_DEFINES="$DART_DEFINES --dart-define=SUPABASE_URL=$SUPABASE_URL"
           fi
           if [ -n "$SUPABASE_PUBLISHABLE_KEY" ]; then
-            if [[ "$SUPABASE_PUBLISHABLE_KEY" =~ ^sb_publishable_ ]]; then
+            if [[ "$SUPABASE_PUBLISHABLE_KEY" =~ ^sb_publishable_ ]] || [[ "$SUPABASE_PUBLISHABLE_KEY" =~ ^eyJ ]]; then
               DART_DEFINES="$DART_DEFINES --dart-define=SUPABASE_PUBLISHABLE_KEY=$SUPABASE_PUBLISHABLE_KEY"
             fi
           fi
@@ -231,7 +231,7 @@ jobs:
             $defines += "--dart-define=SUPABASE_URL=$env:SUPABASE_URL"
           }
           if ($env:SUPABASE_PUBLISHABLE_KEY) {
-            if ($env:SUPABASE_PUBLISHABLE_KEY -match '^sb_publishable_') {
+            if ($env:SUPABASE_PUBLISHABLE_KEY -match '^sb_publishable_' -or $env:SUPABASE_PUBLISHABLE_KEY -match '^eyJ') {
               $defines += "--dart-define=SUPABASE_PUBLISHABLE_KEY=$env:SUPABASE_PUBLISHABLE_KEY"
             }
           }
